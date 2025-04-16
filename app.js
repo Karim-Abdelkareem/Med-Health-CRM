@@ -1,9 +1,11 @@
+// src/app.js
 import express from "express";
 import dotenv from "dotenv";
 import connectDB from "./src/config/database.js";
 import errorHandler from "./src/middleware/errorHandler.js";
 import userRoutes from "./src/module/userModule/userRoutes.js";
 import authRoutes from "./src/module/auth/authRoutes.js";
+import planRoutes from "./src/module/plan/plan.routes.js";
 
 dotenv.config();
 
@@ -19,6 +21,7 @@ app.use(express.urlencoded({ extended: true }));
 // Routes
 app.use("/api/users", userRoutes);
 app.use("/api/auth", authRoutes);
+app.use("/api/plans", planRoutes);
 
 // Home Route
 app.get("/", (req, res) => {

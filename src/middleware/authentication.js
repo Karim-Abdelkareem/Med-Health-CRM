@@ -1,9 +1,10 @@
+// src/middleware/authentication.js
 import User from "../module/userModule/userModel.js";
 import asyncHandler from "express-async-handler";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
-export const protect = asyncHandler(async (req, res, next) => {
+const protect = asyncHandler(async (req, res, next) => {
   const { authorization } = req.headers;
 
   if (!authorization) {
@@ -27,7 +28,7 @@ export const protect = asyncHandler(async (req, res, next) => {
   next();
 });
 
-export const allowedTo = (...roles) => {
+const allowedTo = (...roles) => {
   return asyncHandler(async (req, res, next) => {
     if (!roles.includes(req.user.role)) {
       res.status(403);
@@ -36,3 +37,5 @@ export const allowedTo = (...roles) => {
     next();
   });
 };
+
+export default { protect, allowedTo };
