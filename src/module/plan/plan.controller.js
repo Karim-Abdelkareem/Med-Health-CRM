@@ -1,8 +1,17 @@
 import Plan from "./plan.model.js";
+import { rolesHierarchy, canAccessHigherRole } from "../../utils/roles.js";
+import User from "../userModule/userModel.js";
+import { updateKPI } from "../userModule/userController.js"
+
 
 export const createPlan = async (req, res) => {
     try {
         const { type, date, region, notes } = req.body;
+
+        let warningMessage = null;
+        if (type === "daily" && region.length < 10) {
+            warningMessage = "KPI الخاص بك سيتأثر هذا الشهر بسبب عدم إضافة 10 زيارات.";
+        }
 
         const newPlan = await Plan.create({
             user: req.user._id,
@@ -12,11 +21,23 @@ export const createPlan = async (req, res) => {
             notes,
         });
 
-        res.status(201).json(newPlan);
+        const newKPI = await updateKPI(req.user._id, region.length);
+
+      
+        res.status(201).json({
+            success: true,
+            message: "تم إنشاء الخطة بنجاح",
+            data: newPlan,
+            kpi: newKPI,
+            warning: warningMessage, 
+        });
     } catch (err) {
-        res.status(500).json({ message: "Error creating plan", error: err.message });
+        res.status(500).json({ success: false, message: "خطأ في إنشاء الخطة", error: err.message });
     }
 };
+
+
+
 
 export const getMyPlans = async (req, res) => {
     try {
@@ -116,6 +137,52 @@ export const getMyPlansByFilter = async (req, res) => {
         res.status(500).json({ message: "Error fetching plans", error: err.message });
     }
 };
+
+export const addManagerNote = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { note } = req.body;
+
+        const plan = await Plan.findById(id).populate("user");
+
+        if (!plan) {
+            return res.status(404).json({ message: "Plan not found" });
+        }
+
+        const currentUserRole = req.user.role;
+        const targetUserRole = plan.user.role;
+
+        if (canAccessHigherRole(currentUserRole, targetUserRole)) {
+            plan.managerNotes = note;
+            await plan.save();
+            return res.json({ message: "Note added successfully", plan });
+        } else {
+            return res.status(403).json({ message: "Not authorized to add notes to this user's plan" });
+        }
+    } catch (err) {
+        res.status(500).json({ message: "Error adding note", error: err.message });
+    }
+};
+
+export const getPlansByHierarchy = async (req, res) => {
+    try {
+        const currentUserRole = req.user.role;
+
+        const users = await User.find({
+            role: { $in: Object.keys(rolesHierarchy).filter(role => canAccessHigherRole(currentUserRole, role)) }
+        });
+
+        const userIds = users.map(u => u._id);
+
+        const plans = await Plan.find({ user: { $in: userIds } }).populate("user").sort({ date: 1 });
+
+        res.json(plans);
+    } catch (err) {
+        res.status(500).json({ message: "Error fetching plans", error: err.message });
+    }
+};
+
+
 
 
 
