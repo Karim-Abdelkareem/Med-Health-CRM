@@ -25,6 +25,8 @@ const userSchema = new mongoose.Schema(
       enum: ["ADMIN", "GM", "LM", "DR", "HR", "R"],
       default: "R",
     },
+    kpi: { type: Number, default: 100 },
+
   },
   {
     timestamps: true,

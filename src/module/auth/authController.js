@@ -2,6 +2,7 @@ import User from "../userModule/userModel.js";
 import jwt from "jsonwebtoken";
 import asyncHandler from "express-async-handler";
 import AppError from "../../utils/AppError.js";
+import bcrypt from "bcryptjs";
 
 export const register = asyncHandler(async (req, res, next) => {
   const { name, email, password } = req.body;
@@ -44,3 +45,44 @@ export const login = asyncHandler(async (req, res, next) => {
     },
   });
 });
+
+export const createUserByAdminOrGM = asyncHandler(async (req, res) => {
+  const { name, email, password, role, managerId } = req.body;
+
+  const allowedRoles = {
+    ADMIN: ["GM", "HR", "LM", "DR", "R"],
+    GM: ["LM", "DR", "R"],
+  };
+
+  if (!allowedRoles[req.user.role]?.includes(role)) {
+    res.status(403);
+    throw new Error("غير مصرح لك بإنشاء هذا النوع من المستخدمين");
+  }
+
+  const userExists = await User.findOne({ email });
+  if (userExists) {
+    res.status(400);
+    throw new Error("هذا الإيميل مستخدم بالفعل");
+  }
+
+  const hashedPassword = await bcrypt.hash(password, 10);
+
+  const newUser = await User.create({
+    name,
+    email,
+    password: hashedPassword,
+    role,
+    manager: managerId || req.user._id,
+  });
+
+  res.status(201).json({
+    message: "تم إنشاء المستخدم بنجاح",
+    user: {
+      id: newUser._id,
+      name: newUser.name,
+      email: newUser.email,
+      role: newUser.role,
+    },
+  });
+});
+
