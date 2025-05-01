@@ -6,17 +6,23 @@ import errorHandler from "./src/middleware/errorHandler.js";
 import userRoutes from "./src/module/userModule/userRoutes.js";
 import authRoutes from "./src/module/auth/authRoutes.js";
 import planRoutes from "./src/module/plan/plan.routes.js";
+import cors from "cors";
 
+// Load environment variables
 dotenv.config();
 
 // Connect to database
 connectDB();
 
+// Create Express app
 const app = express();
 
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+//Allow Cors
+app.use(cors());
 
 // Routes
 app.use("/api/users", userRoutes);

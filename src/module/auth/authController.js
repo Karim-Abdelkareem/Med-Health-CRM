@@ -56,13 +56,13 @@ export const createUserByAdminOrGM = asyncHandler(async (req, res) => {
 
   if (!allowedRoles[req.user.role]?.includes(role)) {
     res.status(403);
-    throw new Error("غير مصرح لك بإنشاء هذا النوع من المستخدمين");
+    throw new Error("You are not authorized to create users with this role");
   }
 
   const userExists = await User.findOne({ email });
   if (userExists) {
     res.status(400);
-    throw new Error("هذا الإيميل مستخدم بالفعل");
+    throw new Error("User already exists");
   }
 
   const hashedPassword = await bcrypt.hash(password, 10);
@@ -76,7 +76,7 @@ export const createUserByAdminOrGM = asyncHandler(async (req, res) => {
   });
 
   res.status(201).json({
-    message: "تم إنشاء المستخدم بنجاح",
+    message: "User created successfully",
     user: {
       id: newUser._id,
       name: newUser.name,
@@ -85,4 +85,3 @@ export const createUserByAdminOrGM = asyncHandler(async (req, res) => {
     },
   });
 });
-
