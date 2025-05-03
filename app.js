@@ -6,6 +6,7 @@ import errorHandler from "./src/middleware/errorHandler.js";
 import userRoutes from "./src/module/userModule/userRoutes.js";
 import authRoutes from "./src/module/auth/authRoutes.js";
 import planRoutes from "./src/module/plan/plan.routes.js";
+import locationRoutes from "./src/module/location/locationRoutes.js";
 import cors from "cors";
 
 // Load environment variables
@@ -28,6 +29,7 @@ app.use(cors());
 app.use("/api/users", userRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/plans", planRoutes);
+app.use("/api/locations", locationRoutes);
 
 // Home Route
 app.get("/", (req, res) => {

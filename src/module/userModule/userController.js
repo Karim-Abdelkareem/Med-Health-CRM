@@ -100,49 +100,57 @@ export const getUserProfile = asyncHandler(async (req, res, next) => {
   return next(new AppError("User not found", 404));
 });
 
+export const getUsersByRole = asyncHandler(async (req, res, next) => {
+  console.log(req.query.role);
+
+  const users = await User.find({ role: req.query.role });
+  res.status(200).json({
+    status: "success",
+    message: "Users fetched successfully",
+    data: users,
+  });
+});
 
 function calculateKPI(visitsCount) {
   const kpiBase = 100;
 
   if (visitsCount >= 10) {
-      return kpiBase;
+    return kpiBase;
   } else {
-      const penalty = 0.1;
-      const reducedKPI = kpiBase * (1 - penalty);
-      return reducedKPI;
+    const penalty = 0.1;
+    const reducedKPI = kpiBase * (1 - penalty);
+    return reducedKPI;
   }
 }
 
 export const updateKPI = async (userId, visitsCount) => {
   try {
-      const user = await User.findById(userId);
+    const user = await User.findById(userId);
 
-      if (!user) {
-          throw new Error("User not found");
-      }
+    if (!user) {
+      throw new Error("User not found");
+    }
 
-      const newKPI = calculateKPI(visitsCount);
+    const newKPI = calculateKPI(visitsCount);
 
-      user.kpi = newKPI;
-      await user.save();
+    user.kpi = newKPI;
+    await user.save();
 
-      return newKPI; 
+    return newKPI;
   } catch (err) {
-      throw new Error(`Error updating KPI: ${err.message}`);
+    throw new Error(`Error updating KPI: ${err.message}`);
   }
 };
 
-export const calculateMonthlyKPI = async(userId) => {
-
-  const plans = await Plan.find({ user: userId, type: 'monthly' });
+export const calculateMonthlyKPI = async (userId) => {
+  const plans = await Plan.find({ user: userId, type: "monthly" });
 
   let totalVisits = 0;
-  plans.forEach(plan => {
+  plans.forEach((plan) => {
     totalVisits += plan.region.length;
   });
 
-  const kpi = totalVisits * 10; 
-
+  const kpi = totalVisits * 10;
 
   const user = await User.findById(userId);
   user.kpi = kpi;
@@ -152,64 +160,66 @@ export const calculateMonthlyKPI = async(userId) => {
 };
 
 export const calculateKPIForAllEmployees = async (req, res) => {
-    try {
-        const userRole = req.user.role;
-        if (!["ADMIN", "GM"].includes(userRole)) {
-            return res.status(403).json({ success: false, message: "ليس لديك صلاحية" });
-        }
-
-        const startOfMonth = new Date();
-        startOfMonth.setDate(1);
-        startOfMonth.setHours(0, 0, 0, 0);
-
-        const endOfMonth = new Date(startOfMonth);
-        endOfMonth.setMonth(endOfMonth.getMonth() + 1);
-
-        const users = await User.find({ role: { $nin: ["ADMIN", "GM"] } });
-
-        const kpiReport = [];
-
-        for (const employee of users) {
-            const plans = await Plan.find({
-                user: employee._id,
-                type: "daily",
-                date: { $gte: startOfMonth, $lt: endOfMonth }
-            });
-
-            const totalVisits = plans.reduce((sum, plan) => sum + (plan.region.length || 0), 0);
-            const maxExpectedVisits = plans.length * 10;
-
-            let kpi = 100;
-            if (maxExpectedVisits > 0) {
-                kpi = Math.round((totalVisits / maxExpectedVisits) * 100);
-            }
-
-            employee.kpi = kpi;
-            await employee.save();
-
-            kpiReport.push({
-                employeeId: employee._id,
-                name: employee.name,
-                email: employee.email,
-                totalPlans: plans.length,
-                totalVisits,
-                kpi,
-            });
-        }
-
-        res.status(200).json({
-            success: true,
-            message: "تم حساب KPI لجميع الموظفين",
-            data: kpiReport
-        });
-
-    } catch (err) {
-        res.status(500).json({
-            success: false,
-            message: "حدث خطأ أثناء حساب KPI",
-            error: err.message
-        });
+  try {
+    const userRole = req.user.role;
+    if (!["ADMIN", "GM"].includes(userRole)) {
+      return res
+        .status(403)
+        .json({ success: false, message: "ليس لديك صلاحية" });
     }
+
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const endOfMonth = new Date(startOfMonth);
+    endOfMonth.setMonth(endOfMonth.getMonth() + 1);
+
+    const users = await User.find({ role: { $nin: ["ADMIN", "GM"] } });
+
+    const kpiReport = [];
+
+    for (const employee of users) {
+      const plans = await Plan.find({
+        user: employee._id,
+        type: "daily",
+        date: { $gte: startOfMonth, $lt: endOfMonth },
+      });
+
+      const totalVisits = plans.reduce(
+        (sum, plan) => sum + (plan.region.length || 0),
+        0
+      );
+      const maxExpectedVisits = plans.length * 10;
+
+      let kpi = 100;
+      if (maxExpectedVisits > 0) {
+        kpi = Math.round((totalVisits / maxExpectedVisits) * 100);
+      }
+
+      employee.kpi = kpi;
+      await employee.save();
+
+      kpiReport.push({
+        employeeId: employee._id,
+        name: employee.name,
+        email: employee.email,
+        totalPlans: plans.length,
+        totalVisits,
+        kpi,
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "تم حساب KPI لجميع الموظفين",
+      data: kpiReport,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: "حدث خطأ أثناء حساب KPI",
+      error: err.message,
+    });
+  }
 };
-
-

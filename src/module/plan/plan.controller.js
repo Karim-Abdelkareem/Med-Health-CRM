@@ -18,8 +18,8 @@ export const createPlan = async (req, res) => {
       user: req.user._id,
       type,
       date,
-      region,
-      tasks,
+      region: region || undefined,
+      tasks: tasks || undefined,
       notes,
     });
 
@@ -229,6 +229,31 @@ export const updateVisitedRegion = asyncHandler(async (req, res) => {
   res.status(200).json({ message: "Visited Region updated successfully" });
 });
 
+//unvisit Region
+export const unvisitRegion = asyncHandler(async (req, res) => {
+  const { id, region: regionId } = req.params;
+
+  const plan = await Plan.findById(id);
+
+  if (!plan) return new AppError("Plan not found", 404);
+
+  if (plan.user.toString() !== req.user._id.toString()) {
+    return new AppError("Unauthorized", 403);
+  }
+
+  const selectedRegion = plan.region.id(regionId);
+
+  if (!selectedRegion) new AppError("Region not found", 404);
+
+  selectedRegion.visitedLatitude = null;
+  selectedRegion.visitedLongitude = null;
+  selectedRegion.visitedDate = null;
+  selectedRegion.status = "pending";
+
+  await plan.save();
+  res.status(200).json({ message: "Region unvisited successfully" });
+});
+
 //
 export const getMyPlansWithDate = async (req, res) => {
   const { type } = req.query;
@@ -292,3 +317,34 @@ export const getMyPlansWithDate = async (req, res) => {
       .json({ message: "Error fetching plans", error: err.message });
   }
 };
+
+export const getPlansByUserRole = asyncHandler(async (req, res) => {
+  const role = req.params.role;
+  const userId = req.params.userId;
+
+  const plans = await Plan.find({ user: userId, role });
+  res.status(200).json(plans);
+});
+//get User Monthly Plan filtered by date
+export const getMonthlyPlans = asyncHandler(async (req, res, next) => {
+  const { startDate, endDate, userId } = req.query;
+
+  if (!startDate || !endDate) {
+    return next(new AppError("Please provide both start and end dates", 400));
+  }
+
+  const plans = await Plan.find({
+    user: userId,
+    date: { $gte: new Date(startDate), $lte: new Date(endDate) },
+  });
+
+  if (plans) {
+    res.status(200).json({
+      status: "success",
+      message: "User's monthly plans fetched successfully",
+      data: plans,
+    });
+  } else {
+    return next(new AppError("No plans found for this period", 404));
+  }
+});

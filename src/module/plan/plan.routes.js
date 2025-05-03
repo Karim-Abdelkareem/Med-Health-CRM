@@ -10,6 +10,8 @@ import {
   getPlansByHierarchy,
   updateVisitedRegion,
   getMyPlansWithDate,
+  unvisitRegion,
+  getMonthlyPlans,
 } from "./plan.controller.js";
 import auth from "../../middleware/authentication.js";
 
@@ -24,5 +26,7 @@ router.delete("/:id", auth.protect, deletePlan);
 router.patch("/:id/manager-note", auth.protect, addManagerNote);
 router.get("/all-under-me", auth.protect, getPlansByHierarchy);
 router.put("/complete/:id/:region", auth.protect, updateVisitedRegion);
+router.put("/unvisit/:id/:region", auth.protect, unvisitRegion);
+router.get("/monthly", auth.protect, getMonthlyPlans);
 
 export default router;
