@@ -13,10 +13,11 @@ const planSchema = new mongoose.Schema(
     date: { type: Date, required: true },
     region: [
       {
-        location: { type: String, required: true },
-        longitude: { type: Number, required: true },
+        location: { type: String, required: true }, 
+        doctorName: { type: String, required: true }, 
+        longitude: { type: Number, required: true }, 
         latitude: { type: Number, required: true },
-        visitDate: { type: Date, required: true },
+        visitTime: { type: Date, required: true }, 
         visitedDate: { type: Date },
         visitedLatitude: { type: Number },
         visitedLongitude: { type: Number },

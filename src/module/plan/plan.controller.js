@@ -4,12 +4,47 @@ import User from "../userModule/userModel.js";
 import { updateKPI } from "../userModule/userController.js";
 import asyncHandler from "express-async-handler";
 import AppError from "../../utils/AppError.js";
+import mongoose from "mongoose";
 
+
+// Helper function to create daily plans
+const createDailyPlans = async (weeklyPlan, region) => {
+  const dailyPlans = [];
+
+  // Create 7 daily plans for each week
+  for (let i = 0; i < 7; i++) {
+    let dailyPlan = {
+      type: "daily",
+      date: new Date(weeklyPlan.date.getTime() + i * 24 * 60 * 60 * 1000),
+      region: [],
+      tasks: weeklyPlan.tasks || [],
+      notes: weeklyPlan.notes,
+    };
+
+    // Add 12 regions (visits) per daily plan
+    for (let j = 0; j < 12; j++) {
+      dailyPlan.region.push({
+        location: region.location,
+        doctorName: region.doctorName,
+        latitude: region.latitude,
+        longitude: region.longitude,
+        visitTime: region.visitTime,
+      });
+    }
+
+    const newDailyPlan = await Plan.create(dailyPlan);
+    dailyPlans.push(newDailyPlan);
+  }
+
+  return dailyPlans;
+};
+
+// Create a new plan (monthly, weekly, or daily)
 export const createPlan = async (req, res) => {
   try {
     const { type, date, tasks, region, notes } = req.body;
-
     let warningMessage = null;
+
     if (type === "daily" && region.length < 10) {
       warningMessage = "You should have at least 10 locations for daily plan";
     }
@@ -22,6 +57,28 @@ export const createPlan = async (req, res) => {
       tasks: tasks || undefined,
       notes,
     });
+
+    if (type === "monthly") {
+      // Automatically create 4 weekly plans for monthly plan
+      const weeklyPlans = await createWeeklyPlans(newPlan, region);
+      return res.status(201).json({
+        success: true,
+        message: "Monthly plan created successfully",
+        data: newPlan,
+        warning: warningMessage,
+      });
+    }
+
+    if (type === "weekly") {
+      // Automatically create 7 daily plans for weekly plan
+      const dailyPlans = await createDailyPlans(newPlan, region);
+      return res.status(201).json({
+        success: true,
+        message: "Weekly plan created successfully",
+        data: dailyPlans,
+        warning: warningMessage,
+      });
+    }
 
     res.status(201).json({
       success: true,
@@ -38,20 +95,39 @@ export const createPlan = async (req, res) => {
   }
 };
 
+// Create weekly plans for monthly plan
+const createWeeklyPlans = async (monthlyPlan, region) => {
+  const weeklyPlans = [];
+  for (let i = 0; i < 4; i++) {
+    let weeklyPlan = {
+      type: "weekly",
+      date: new Date(monthlyPlan.date.getTime() + i * 7 * 24 * 60 * 60 * 1000), // Offset by one week for each plan
+      region: region || [],
+      tasks: monthlyPlan.tasks || [],
+      notes: monthlyPlan.notes,
+    };
+
+    const newWeeklyPlan = await Plan.create(weeklyPlan);
+    weeklyPlans.push(newWeeklyPlan);
+
+    // Automatically create 7 daily plans for each weekly plan
+    await createDailyPlans(newWeeklyPlan, region);
+  }
+  return weeklyPlans;
+};
+
+// Get all plans of the current user filtered by type
 export const getMyPlans = async (req, res) => {
   const { type } = req.query;
   try {
-    const plans = await Plan.find({ user: req.user._id, type }).sort({
-      date: 1,
-    });
+    const plans = await Plan.find({ user: req.user._id, type }).sort({ date: 1 });
     res.json(plans);
   } catch (err) {
-    res
-      .status(500)
-      .json({ message: "Error fetching plans", error: err.message });
+    res.status(500).json({ message: "Error fetching plans", error: err.message });
   }
 };
 
+// Update an existing plan
 export const updatePlan = async (req, res) => {
   try {
     const { id } = req.params;
@@ -63,17 +139,14 @@ export const updatePlan = async (req, res) => {
       return res.status(403).json({ message: "Unauthorized" });
     }
 
-    const updatedPlan = await Plan.findByIdAndUpdate(id, req.body, {
-      new: true,
-    });
+    const updatedPlan = await Plan.findByIdAndUpdate(id, req.body, { new: true });
     res.json(updatedPlan);
   } catch (err) {
-    res
-      .status(500)
-      .json({ message: "Error updating plan", error: err.message });
+    res.status(500).json({ message: "Error updating plan", error: err.message });
   }
 };
 
+// Delete an existing plan
 export const deletePlan = async (req, res) => {
   try {
     const { id } = req.params;
@@ -88,16 +161,14 @@ export const deletePlan = async (req, res) => {
     await plan.deleteOne();
     res.json({ message: "Plan deleted successfully" });
   } catch (err) {
-    res
-      .status(500)
-      .json({ message: "Error deleting plan", error: err.message });
+    res.status(500).json({ message: "Error deleting plan", error: err.message });
   }
 };
 
+// Get plans of the current user based on filter
 export const getMyPlansByFilter = async (req, res) => {
   try {
     const { keyword, type, date, startDate, endDate } = req.query;
-
     let filter = { user: req.user._id };
 
     if (type) {
@@ -143,12 +214,11 @@ export const getMyPlansByFilter = async (req, res) => {
     const plans = await Plan.find(filter).sort({ date: 1 });
     res.json(plans);
   } catch (err) {
-    res
-      .status(500)
-      .json({ message: "Error fetching plans", error: err.message });
+    res.status(500).json({ message: "Error fetching plans", error: err.message });
   }
 };
 
+// Add manager note to a user's plan
 export const addManagerNote = async (req, res) => {
   try {
     const { id } = req.params;
@@ -168,19 +238,17 @@ export const addManagerNote = async (req, res) => {
       await plan.save();
       return res.json({ message: "Note added successfully", plan });
     } else {
-      return res
-        .status(403)
-        .json({ message: "Not authorized to add notes to this user's plan" });
+      return res.status(403).json({ message: "Not authorized to add notes to this user's plan" });
     }
   } catch (err) {
     res.status(500).json({ message: "Error adding note", error: err.message });
   }
 };
 
+// Fetch plans based on user role hierarchy
 export const getPlansByHierarchy = async (req, res) => {
   try {
     const currentUserRole = req.user.role;
-
     const users = await User.find({
       role: {
         $in: Object.keys(rolesHierarchy).filter((role) =>
@@ -190,20 +258,17 @@ export const getPlansByHierarchy = async (req, res) => {
     });
 
     const userIds = users.map((u) => u._id);
-
     const plans = await Plan.find({ user: { $in: userIds } })
       .populate("user")
       .sort({ date: 1 });
 
     res.json(plans);
   } catch (err) {
-    res
-      .status(500)
-      .json({ message: "Error fetching plans", error: err.message });
+    res.status(500).json({ message: "Error fetching plans", error: err.message });
   }
 };
 
-//update Visited Region
+// Update visited region information in a plan
 export const updateVisitedRegion = asyncHandler(async (req, res) => {
   const { id, region: regionId } = req.params;
   const { visitedLatitude, visitedLongitude } = req.body;
@@ -229,7 +294,7 @@ export const updateVisitedRegion = asyncHandler(async (req, res) => {
   res.status(200).json({ message: "Visited Region updated successfully" });
 });
 
-//unvisit Region
+// Unvisit region in a plan
 export const unvisitRegion = asyncHandler(async (req, res) => {
   const { id, region: regionId } = req.params;
 
@@ -254,7 +319,29 @@ export const unvisitRegion = asyncHandler(async (req, res) => {
   res.status(200).json({ message: "Region unvisited successfully" });
 });
 
-//
+// Get plans filtered by user role and date range
+export const getMonthlyPlans = asyncHandler(async (req, res, next) => {
+  const { startDate, endDate, userId } = req.query;
+
+  if (!startDate || !endDate) {
+    return next(new AppError("Please provide both start and end dates", 400));
+  }
+
+  const plans = await Plan.find({
+    user: userId,
+    date: { $gte: new Date(startDate), $lte: new Date(endDate) },
+  });
+
+  if (plans) {
+    res.status(200).json({
+      status: "success",
+      message: "User's monthly plans fetched successfully",
+      data: plans,
+    });
+  } else {
+    return next(new AppError("No plans found for this period", 404));
+  }
+});
 export const getMyPlansWithDate = async (req, res) => {
   const { type } = req.query;
 
@@ -318,33 +405,3 @@ export const getMyPlansWithDate = async (req, res) => {
   }
 };
 
-export const getPlansByUserRole = asyncHandler(async (req, res) => {
-  const role = req.params.role;
-  const userId = req.params.userId;
-
-  const plans = await Plan.find({ user: userId, role });
-  res.status(200).json(plans);
-});
-//get User Monthly Plan filtered by date
-export const getMonthlyPlans = asyncHandler(async (req, res, next) => {
-  const { startDate, endDate, userId } = req.query;
-
-  if (!startDate || !endDate) {
-    return next(new AppError("Please provide both start and end dates", 400));
-  }
-
-  const plans = await Plan.find({
-    user: userId,
-    date: { $gte: new Date(startDate), $lte: new Date(endDate) },
-  });
-
-  if (plans) {
-    res.status(200).json({
-      status: "success",
-      message: "User's monthly plans fetched successfully",
-      data: plans,
-    });
-  } else {
-    return next(new AppError("No plans found for this period", 404));
-  }
-});
