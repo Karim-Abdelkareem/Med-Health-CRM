@@ -11,36 +11,64 @@ const planSchema = new mongoose.Schema(
       required: true,
     },
     date: { type: Date, required: true },
-    region: [
-      {
-        location: { type: String, required: true }, 
-        doctorName: { type: String, required: true }, 
-        longitude: { type: Number, required: true }, 
-        latitude: { type: Number, required: true },
-        visitTime: { type: Date, required: true }, 
-        visitedDate: { type: Date },
-        visitedLatitude: { type: Number },
-        visitedLongitude: { type: Number },
-        status: {
-          type: String,
-          enum: ["pending", "completed", "incomplete"],
-          default: "pending",
-        },
-      },
-    ],
+    location: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Location",
+    },
+    visitDate: { type: Date, required: true },
+    visitedLatitude: { type: Number },
+    visitedLongitude: { type: Number },
+    visitedDate: { type: Date },
+    status: {
+      type: String,
+      enum: ["completed", "incomplete"],
+      default: "incomplete",
+    },
     tasks: [
       {
         task: { type: String, required: true },
         status: {
           type: String,
-          enum: ["pending", "completed", "incomplete"],
+          enum: ["completed", "incomplete"],
           default: "pending",
         },
       },
     ],
     notes: String,
-    managerNotes: {
+    gmNotes: {
       type: String,
+      user: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
+      },
+      default: "",
+    },
+    lmNotes: {
+      type: String,
+      user: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
+      },
+      default: "",
+    },
+    hrNotes: {
+      type: String,
+      user: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
+      },
+      default: "",
+    },
+    dmNotes: {
+      type: String,
+      user: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
+      },
       default: "",
     },
   },

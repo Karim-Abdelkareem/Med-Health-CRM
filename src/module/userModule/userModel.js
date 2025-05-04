@@ -20,13 +20,23 @@ const userSchema = new mongoose.Schema(
       required: true,
       minlength: 6,
     },
+    LM: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+    DM: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+    governerate: {
+      type: String,
+    },
     role: {
       type: String,
-      enum: ["ADMIN", "GM", "LM", "DR", "HR", "R"],
+      enum: ["ADMIN", "GM", "LM", "DM", "HR", "R"],
       default: "R",
     },
     kpi: { type: Number, default: 100 },
-
   },
   {
     timestamps: true,
