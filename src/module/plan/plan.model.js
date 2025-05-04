@@ -33,7 +33,16 @@ const planSchema = new mongoose.Schema(
         },
       },
     ],
-    notes: String,
+    notes: [
+      {
+        location: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Location",
+          required: true,
+        },
+        note: { type: String, default: "" },
+      },
+    ],
     gmNotes: [
       {
         type: String,
