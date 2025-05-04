@@ -5,25 +5,24 @@ import mongoose from "mongoose";
 const planSchema = new mongoose.Schema(
   {
     user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-    type: {
-      type: String,
-      enum: ["daily", "weekly", "monthly"],
-      required: true,
-    },
-    date: { type: Date, required: true },
-    location: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Location",
-    },
-    visitDate: { type: Date, required: true },
+    locations: [
+      {
+        location: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Location",
+          required: true,
+        },
+        status: {
+          type: String,
+          enum: ["completed", "incomplete"],
+          default: "incomplete",
+        },
+      },
+    ],
+    visitDate: { type: Date },
     visitedLatitude: { type: Number },
     visitedLongitude: { type: Number },
     visitedDate: { type: Date },
-    status: {
-      type: String,
-      enum: ["completed", "incomplete"],
-      default: "incomplete",
-    },
     tasks: [
       {
         task: { type: String, required: true },
@@ -35,42 +34,50 @@ const planSchema = new mongoose.Schema(
       },
     ],
     notes: String,
-    gmNotes: {
-      type: String,
-      user: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-        required: true,
+    gmNotes: [
+      {
+        type: String,
+        user: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+          required: true,
+        },
+        default: "",
       },
-      default: "",
-    },
-    lmNotes: {
-      type: String,
-      user: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-        required: true,
+    ],
+    lmNotes: [
+      {
+        type: String,
+        user: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+          required: true,
+        },
+        default: "",
       },
-      default: "",
-    },
-    hrNotes: {
-      type: String,
-      user: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-        required: true,
+    ],
+    hrNotes: [
+      {
+        type: String,
+        user: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+          required: true,
+        },
+        default: "",
       },
-      default: "",
-    },
-    dmNotes: {
-      type: String,
-      user: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-        required: true,
+    ],
+    dmNotes: [
+      {
+        type: String,
+        user: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+          required: true,
+        },
+        default: "",
       },
-      default: "",
-    },
+    ],
   },
   { timestamps: true }
 );

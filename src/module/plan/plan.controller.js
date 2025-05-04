@@ -4,8 +4,6 @@ import User from "../userModule/userModel.js";
 import { updateKPI } from "../userModule/userController.js";
 import asyncHandler from "express-async-handler";
 import AppError from "../../utils/AppError.js";
-import mongoose from "mongoose";
-
 
 // Helper function to create daily plans
 const createDailyPlans = async (weeklyPlan, region) => {
@@ -120,10 +118,14 @@ const createWeeklyPlans = async (monthlyPlan, region) => {
 export const getMyPlans = async (req, res) => {
   const { type } = req.query;
   try {
-    const plans = await Plan.find({ user: req.user._id, type }).sort({ date: 1 });
+    const plans = await Plan.find({ user: req.user._id, type }).sort({
+      date: 1,
+    });
     res.json(plans);
   } catch (err) {
-    res.status(500).json({ message: "Error fetching plans", error: err.message });
+    res
+      .status(500)
+      .json({ message: "Error fetching plans", error: err.message });
   }
 };
 
@@ -139,10 +141,14 @@ export const updatePlan = async (req, res) => {
       return res.status(403).json({ message: "Unauthorized" });
     }
 
-    const updatedPlan = await Plan.findByIdAndUpdate(id, req.body, { new: true });
+    const updatedPlan = await Plan.findByIdAndUpdate(id, req.body, {
+      new: true,
+    });
     res.json(updatedPlan);
   } catch (err) {
-    res.status(500).json({ message: "Error updating plan", error: err.message });
+    res
+      .status(500)
+      .json({ message: "Error updating plan", error: err.message });
   }
 };
 
@@ -161,7 +167,9 @@ export const deletePlan = async (req, res) => {
     await plan.deleteOne();
     res.json({ message: "Plan deleted successfully" });
   } catch (err) {
-    res.status(500).json({ message: "Error deleting plan", error: err.message });
+    res
+      .status(500)
+      .json({ message: "Error deleting plan", error: err.message });
   }
 };
 
@@ -214,7 +222,9 @@ export const getMyPlansByFilter = async (req, res) => {
     const plans = await Plan.find(filter).sort({ date: 1 });
     res.json(plans);
   } catch (err) {
-    res.status(500).json({ message: "Error fetching plans", error: err.message });
+    res
+      .status(500)
+      .json({ message: "Error fetching plans", error: err.message });
   }
 };
 
@@ -238,7 +248,9 @@ export const addManagerNote = async (req, res) => {
       await plan.save();
       return res.json({ message: "Note added successfully", plan });
     } else {
-      return res.status(403).json({ message: "Not authorized to add notes to this user's plan" });
+      return res
+        .status(403)
+        .json({ message: "Not authorized to add notes to this user's plan" });
     }
   } catch (err) {
     res.status(500).json({ message: "Error adding note", error: err.message });
@@ -264,26 +276,28 @@ export const getPlansByHierarchy = async (req, res) => {
 
     res.json(plans);
   } catch (err) {
-    res.status(500).json({ message: "Error fetching plans", error: err.message });
+    res
+      .status(500)
+      .json({ message: "Error fetching plans", error: err.message });
   }
 };
 
 // Update visited region information in a plan
-export const updateVisitedRegion = asyncHandler(async (req, res) => {
+export const updateVisitedRegion = asyncHandler(async (req, res, next) => {
   const { id, region: regionId } = req.params;
   const { visitedLatitude, visitedLongitude } = req.body;
 
   const plan = await Plan.findById(id);
 
-  if (!plan) return new AppError("Plan not found", 404);
+  if (!plan) return next(new AppError("Plan not found", 404));
 
   if (plan.user.toString() !== req.user._id.toString()) {
-    return new AppError("Unauthorized", 403);
+    return next(new AppError("Unauthorized", 403));
   }
 
   const selectedRegion = plan.region.id(regionId);
 
-  if (!selectedRegion) new AppError("Region not found", 404);
+  if (!selectedRegion) return next(new AppError("Region not found", 404));
 
   selectedRegion.visitedLatitude = visitedLatitude;
   selectedRegion.visitedLongitude = visitedLongitude;
@@ -295,20 +309,20 @@ export const updateVisitedRegion = asyncHandler(async (req, res) => {
 });
 
 // Unvisit region in a plan
-export const unvisitRegion = asyncHandler(async (req, res) => {
+export const unvisitRegion = asyncHandler(async (req, res, next) => {
   const { id, region: regionId } = req.params;
 
   const plan = await Plan.findById(id);
 
-  if (!plan) return new AppError("Plan not found", 404);
+  if (!plan) return next(new AppError("Plan not found", 404));
 
   if (plan.user.toString() !== req.user._id.toString()) {
-    return new AppError("Unauthorized", 403);
+    return next(new AppError("Unauthorized", 403));
   }
 
   const selectedRegion = plan.region.id(regionId);
 
-  if (!selectedRegion) new AppError("Region not found", 404);
+  if (!selectedRegion) return next(new AppError("Region not found", 404));
 
   selectedRegion.visitedLatitude = null;
   selectedRegion.visitedLongitude = null;
@@ -404,4 +418,3 @@ export const getMyPlansWithDate = async (req, res) => {
       .json({ message: "Error fetching plans", error: err.message });
   }
 };
-

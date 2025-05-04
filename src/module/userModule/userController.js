@@ -66,7 +66,7 @@ export const updateUser = asyncHandler(async (req, res, next) => {
     runValidators: true,
   });
   if (user) {
-    res.status(200).json({
+    return res.status(200).json({
       status: "success",
       message: "User updated successfully",
       data: user,
@@ -79,7 +79,7 @@ export const deleteUser = asyncHandler(async (req, res, next) => {
   const user = await User.findByIdAndDelete(req.params.id);
 
   if (user) {
-    res.status(200).json({
+    return res.status(200).json({
       status: "success",
       message: "User deleted successfully",
       data: user,
@@ -91,7 +91,7 @@ export const deleteUser = asyncHandler(async (req, res, next) => {
 export const getUserProfile = asyncHandler(async (req, res, next) => {
   const user = await User.findById(req.user._id);
   if (user) {
-    res.status(200).json({
+    return res.status(200).json({
       status: "success",
       message: "User profile fetched successfully",
       data: user,

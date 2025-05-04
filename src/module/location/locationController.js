@@ -31,8 +31,8 @@ export const createLocation = asyncHandler(async (req, res, next) => {
 
 export const getAllLocations = asyncHandler(async (req, res, next) => {
   const locations = await Location.find({ user: req.user._id });
-  if (locations) {
-    res.status(200).json({
+  if (locations && locations.length > 0) {
+    return res.status(200).json({
       status: "success",
       message: "Locations fetched successfully",
       data: locations,
@@ -44,7 +44,7 @@ export const getAllLocations = asyncHandler(async (req, res, next) => {
 export const getLocationById = asyncHandler(async (req, res, next) => {
   const location = await Location.findById(req.params.id);
   if (location) {
-    res.status(200).json({
+    return res.status(200).json({
       status: "success",
       message: "Location fetched successfully",
       data: location,
@@ -59,7 +59,7 @@ export const updateLocation = asyncHandler(async (req, res, next) => {
     runValidators: true,
   });
   if (location) {
-    res.status(200).json({
+    return res.status(200).json({
       status: "success",
       message: "Location updated successfully",
       data: location,
@@ -71,7 +71,7 @@ export const updateLocation = asyncHandler(async (req, res, next) => {
 export const deleteLocation = asyncHandler(async (req, res, next) => {
   const location = await Location.findByIdAndDelete(req.params.id);
   if (location) {
-    res.status(200).json({
+    return res.status(200).json({
       status: "success",
       message: "Location deleted successfully",
       data: location,

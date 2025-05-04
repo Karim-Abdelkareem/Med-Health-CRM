@@ -7,6 +7,7 @@ import userRoutes from "./src/module/userModule/userRoutes.js";
 import authRoutes from "./src/module/auth/authRoutes.js";
 import planRoutes from "./src/module/plan/plan.routes.js";
 import locationRoutes from "./src/module/location/locationRoutes.js";
+import monthlyRoutes from "./src/module/monthlyPlan/monthlyRoutes.js";
 import cors from "cors";
 
 // Load environment variables
@@ -30,6 +31,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/plans", planRoutes);
 app.use("/api/locations", locationRoutes);
+app.use("/api/monthly-plans", monthlyRoutes);
 
 // Home Route
 app.get("/", (req, res) => {
