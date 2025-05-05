@@ -30,7 +30,7 @@ export const createLocation = asyncHandler(async (req, res, next) => {
 });
 
 export const getAllLocations = asyncHandler(async (req, res, next) => {
-  const locations = await Location.find({ user: req.user._id });
+  const locations = await Location.find();
   if (locations && locations.length > 0) {
     return res.status(200).json({
       status: "success",

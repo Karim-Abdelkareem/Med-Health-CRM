@@ -9,24 +9,50 @@ import {
   addManagerNote,
   getPlansByHierarchy,
   updateVisitedRegion,
-  getMyPlansWithDate,
   unvisitRegion,
   getMonthlyPlans,
+  addNotesToPlanLocation,
+  getPlansByVisitDate,
+  deleteNoteInPlanLocation,
+  editNoteInPlanLocation,
+  addRoleBasedNotesToPlan,
 } from "./plan.controller.js";
 import auth from "../../middleware/authentication.js";
 
 const router = express.Router();
 
 router.post("/", auth.protect, createPlan);
-router.get("/date", auth.protect, getMyPlansWithDate);
 router.get("/all", auth.protect, getMyPlans);
 router.get("/", auth.protect, getMyPlansByFilter);
 router.put("/:id", auth.protect, updatePlan);
 router.delete("/:id", auth.protect, deletePlan);
 router.patch("/:id/manager-note", auth.protect, addManagerNote);
 router.get("/all-under-me", auth.protect, getPlansByHierarchy);
-router.put("/complete/:id/:region", auth.protect, updateVisitedRegion);
-router.put("/unvisit/:id/:region", auth.protect, unvisitRegion);
+router.put("/complete/:id/:locationId", auth.protect, updateVisitedRegion);
+router.put("/unvisit/:id/:locationId", auth.protect, unvisitRegion);
 router.get("/monthly", auth.protect, getMonthlyPlans);
+router.get("/by-visit-date", auth.protect, getPlansByVisitDate);
+router.post(
+  "/:planId/locations/:locationId/notes",
+  auth.protect,
+  addNotesToPlanLocation
+);
+router.patch(
+  "/:planId/locations/:locationId/notes/:noteId",
+  auth.protect,
+  editNoteInPlanLocation
+);
+router.delete(
+  "/:planId/locations/:locationId/notes/:noteId",
+  auth.protect,
+  deleteNoteInPlanLocation
+);
+
+// Route for adding role-based notes
+router.post(
+  "/:planId/locations/:locationId/role-notes",
+  auth.protect,
+  addRoleBasedNotesToPlan
+);
 
 export default router;

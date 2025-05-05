@@ -23,7 +23,7 @@ export const createMonthlyPlan = asyncHandler(async (req, res, next) => {
         visitDate: plan.visitDate,
         locations: transformedLocations,
         tasks: plan.tasks || [],
-        notes: plan.notes || "",
+        notes: plan.notes && plan.notes.length > 0 ? plan.notes : [],
       });
 
       return createdPlan._id;
@@ -87,6 +87,18 @@ export const getCurrentMonthPlans = asyncHandler(async (req, res, next) => {
       path: "plans",
       populate: {
         path: "locations.location",
+      },
+    })
+    .populate({
+      path: "plans",
+      populate: {
+        path: "notes.location",
+      },
+    })
+    .populate({
+      path: "plans",
+      populate: {
+        path: "hrNotes.location hrNotes.user",
       },
     });
 

@@ -284,56 +284,183 @@ export const getPlansByHierarchy = async (req, res) => {
 
 // Update visited region information in a plan
 export const updateVisitedRegion = asyncHandler(async (req, res, next) => {
-  const { id, region: regionId } = req.params;
+  const { id, locationId } = req.params;
   const { visitedLatitude, visitedLongitude } = req.body;
 
-  const plan = await Plan.findById(id);
-
-  if (!plan) return next(new AppError("Plan not found", 404));
-
-  if (plan.user.toString() !== req.user._id.toString()) {
-    return next(new AppError("Unauthorized", 403));
+  // Validate input
+  if (!visitedLatitude || !visitedLongitude) {
+    return next(
+      new AppError("Please provide both latitude and longitude", 400)
+    );
   }
 
-  const selectedRegion = plan.region.id(regionId);
+  try {
+    // Find the plan
+    const plan = await Plan.findById(id);
 
-  if (!selectedRegion) return next(new AppError("Region not found", 404));
+    if (!plan) {
+      return next(new AppError("Plan not found", 404));
+    }
 
-  selectedRegion.visitedLatitude = visitedLatitude;
-  selectedRegion.visitedLongitude = visitedLongitude;
-  selectedRegion.visitedDate = new Date();
-  selectedRegion.status = "completed";
+    // Check if user is authorized to update this plan
+    if (plan.user.toString() !== req.user._id.toString()) {
+      return next(
+        new AppError("You are not authorized to update this plan", 403)
+      );
+    }
 
-  await plan.save();
-  res.status(200).json({ message: "Visited Region updated successfully" });
+    // Try to find by _id
+    let locationIndex = plan.locations.findIndex(
+      (loc) => loc._id && loc._id.toString() === locationId
+    );
+    // If not found, try to find by location field
+    if (locationIndex === -1) {
+      locationIndex = plan.locations.findIndex(
+        (loc) => loc.location && loc.location.toString() === locationId
+      );
+    }
+
+    if (locationIndex === -1) {
+      // Log all location IDs for debugging
+      console.log(
+        "All location IDs:",
+        plan.locations.map((loc) => ({
+          _id: loc._id ? loc._id.toString() : "undefined",
+          location: loc.location ? loc.location.toString() : "undefined",
+        }))
+      );
+      return next(new AppError("Location not found in this plan", 404));
+    }
+
+    // Check if notes is a string and convert it to an array if needed
+    if (typeof plan.notes === "string") {
+      // First, update the plan to convert notes from string to array
+      await Plan.findByIdAndUpdate(
+        id,
+        { $set: { notes: [] } },
+        { runValidators: false }
+      );
+    }
+
+    // Create an update object with only the fields we want to change
+    const updateData = {
+      $set: {
+        [`locations.${locationIndex}.status`]: "completed",
+        [`locations.${locationIndex}.visitedLatitude`]: visitedLatitude,
+        [`locations.${locationIndex}.visitedLongitude`]: visitedLongitude,
+        [`locations.${locationIndex}.visitedDate`]: new Date(),
+      },
+    };
+
+    // Update the plan using findByIdAndUpdate to avoid validation issues with other fields
+    await Plan.findByIdAndUpdate(id, updateData, {
+      new: true,
+      runValidators: false,
+    });
+
+    return res.status(200).json({
+      status: "success",
+      message: "Location marked as completed successfully",
+      data: {
+        planId: plan._id,
+        locationId,
+        visitedLatitude,
+        visitedLongitude,
+        visitedDate: new Date(),
+      },
+    });
+  } catch (error) {
+    return next(
+      new AppError(`Error updating location status: ${error.message}`, 500)
+    );
+  }
 });
 
 // Unvisit region in a plan
 export const unvisitRegion = asyncHandler(async (req, res, next) => {
-  const { id, region: regionId } = req.params;
+  const { id, locationId } = req.params;
 
-  const plan = await Plan.findById(id);
+  try {
+    // Find the plan
+    const plan = await Plan.findById(id);
 
-  if (!plan) return next(new AppError("Plan not found", 404));
+    if (!plan) {
+      return next(new AppError("Plan not found", 404));
+    }
 
-  if (plan.user.toString() !== req.user._id.toString()) {
-    return next(new AppError("Unauthorized", 403));
+    // Check if user is authorized to update this plan
+    if (plan.user.toString() !== req.user._id.toString()) {
+      return next(
+        new AppError("You are not authorized to update this plan", 403)
+      );
+    }
+
+    // Try to find by _id
+    let locationIndex = plan.locations.findIndex(
+      (loc) => loc._id && loc._id.toString() === locationId
+    );
+
+    // If not found, try to find by location field
+    if (locationIndex === -1) {
+      locationIndex = plan.locations.findIndex(
+        (loc) => loc.location && loc.location.toString() === locationId
+      );
+    }
+
+    if (locationIndex === -1) {
+      // Log all location IDs for debugging
+      console.log(
+        "All location IDs:",
+        plan.locations.map((loc) => ({
+          _id: loc._id ? loc._id.toString() : "undefined",
+          location: loc.location ? loc.location.toString() : "undefined",
+        }))
+      );
+      return next(new AppError("Location not found in this plan", 404));
+    }
+
+    // Check if notes is a string and convert it to an array if needed
+    if (typeof plan.notes === "string") {
+      // First, update the plan to convert notes from string to array
+      await Plan.findByIdAndUpdate(
+        id,
+        { $set: { notes: [] } },
+        { runValidators: false }
+      );
+    }
+
+    // Create an update object with only the fields we want to change
+    const updateData = {
+      $set: {
+        [`locations.${locationIndex}.status`]: "incomplete",
+        [`locations.${locationIndex}.visitedLatitude`]: null,
+        [`locations.${locationIndex}.visitedLongitude`]: null,
+        [`locations.${locationIndex}.visitedDate`]: null,
+      },
+    };
+
+    // Update the plan using findByIdAndUpdate to avoid validation issues with other fields
+    await Plan.findByIdAndUpdate(id, updateData, {
+      new: true,
+      runValidators: false,
+    });
+
+    return res.status(200).json({
+      status: "success",
+      message: "Location marked as incomplete successfully",
+      data: {
+        planId: plan._id,
+        locationId,
+      },
+    });
+  } catch (error) {
+    return next(
+      new AppError(`Error updating location status: ${error.message}`, 500)
+    );
   }
-
-  const selectedRegion = plan.region.id(regionId);
-
-  if (!selectedRegion) return next(new AppError("Region not found", 404));
-
-  selectedRegion.visitedLatitude = null;
-  selectedRegion.visitedLongitude = null;
-  selectedRegion.visitedDate = null;
-  selectedRegion.status = "pending";
-
-  await plan.save();
-  res.status(200).json({ message: "Region unvisited successfully" });
 });
 
-// Get plans filtered by user role and date range
+// Get plans filtered by user role and visit date range
 export const getMonthlyPlans = asyncHandler(async (req, res, next) => {
   const { startDate, endDate, userId } = req.query;
 
@@ -341,13 +468,28 @@ export const getMonthlyPlans = asyncHandler(async (req, res, next) => {
     return next(new AppError("Please provide both start and end dates", 400));
   }
 
+  if (!userId) {
+    return next(new AppError("User ID is required", 400));
+  }
+
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+
+  if (isNaN(start) || isNaN(end)) {
+    return next(new AppError("Invalid start or end date format", 400));
+  }
+
   const plans = await Plan.find({
     user: userId,
-    date: { $gte: new Date(startDate), $lte: new Date(endDate) },
-  });
+    visitDate: { $gte: start, $lte: end },
+  })
+    .populate("locations.location")
+    .populate("user")
+    .sort({ visitDate: 1 })
+    .exec();
 
-  if (plans) {
-    res.status(200).json({
+  if (plans.length > 0) {
+    return res.status(200).json({
       status: "success",
       message: "User's monthly plans fetched successfully",
       data: plans,
@@ -356,65 +498,274 @@ export const getMonthlyPlans = asyncHandler(async (req, res, next) => {
     return next(new AppError("No plans found for this period", 404));
   }
 });
-export const getMyPlansWithDate = async (req, res) => {
-  const { type } = req.query;
 
-  // Get today's start and end date
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
+// Get plans by visit date range
+export const getPlansByVisitDate = asyncHandler(async (req, res, next) => {
+  const { startDate, endDate } = req.query;
+  const userId = req.user._id;
 
-  const endOfDay = new Date();
-  endOfDay.setHours(23, 59, 59, 999);
-
-  // Get the start and end date of this week (from Sunday to Saturday)
-  const startOfWeek = new Date();
-  startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay()); // Set to Sunday
-  startOfWeek.setHours(0, 0, 0, 0);
-
-  const endOfWeek = new Date(startOfWeek);
-  endOfWeek.setDate(startOfWeek.getDate() + 6); // Set to Saturday
-  endOfWeek.setHours(23, 59, 59, 999);
-
-  // Get the start and end date of this month (from the 1st to the last day of the month)
-  const startOfMonth = new Date();
-  startOfMonth.setDate(1); // Set to the 1st day of the month
-  startOfMonth.setHours(0, 0, 0, 0);
-
-  const endOfMonth = new Date(startOfMonth);
-  endOfMonth.setMonth(startOfMonth.getMonth() + 1); // Move to the next month
-  endOfMonth.setDate(0); // Set to the last day of the current month
-  endOfMonth.setHours(23, 59, 59, 999);
+  if (!startDate || !endDate) {
+    return next(new AppError("Please provide both start and end dates", 400));
+  }
 
   try {
-    let plans;
+    // Find plans where at least one location has a visitDate within the specified range
+    const plans = await Plan.find({
+      user: userId,
+      visitDate: {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate),
+      },
+    })
+      .populate("locations.location")
+      .populate("user")
+      .populate("hrNotes.location hrNotes.user");
 
-    // Based on the `type` (today, weekly, monthly), fetch the respective plans
-    if (type === "daily") {
-      plans = await Plan.find({
-        user: req.user._id,
-        type: "daily",
-        date: { $gte: startOfDay, $lte: endOfDay },
-      }).sort({ date: 1 });
-    } else if (type === "weekly") {
-      plans = await Plan.find({
-        user: req.user._id,
-        type: "weekly",
-        date: { $gte: startOfWeek, $lte: endOfWeek },
-      }).sort({ date: 1 });
-    } else if (type === "monthly") {
-      plans = await Plan.find({
-        user: req.user._id,
-        type: "monthly",
-        date: { $gte: startOfMonth, $lte: endOfMonth },
-      }).sort({ date: 1 });
+    if (plans && plans.length > 0) {
+      return res.status(200).json({
+        status: "success",
+        message: "Plans fetched successfully",
+        data: plans,
+      });
     } else {
-      return res.status(400).json({ message: "Invalid plan type" });
+      return res.status(200).json({
+        status: "success",
+        message: "No plans found for this period",
+        data: [],
+      });
+    }
+  } catch (error) {
+    return next(new AppError(`Error fetching plans: ${error.message}`, 500));
+  }
+});
+
+// Add notes to plan location
+export const addNotesToPlanLocation = asyncHandler(async (req, res, next) => {
+  const { planId, locationId } = req.params;
+  const { note } = req.body;
+
+  if (!note || typeof note !== "string" || !note.trim()) {
+    return next(new AppError("Note content is required", 400));
+  }
+
+  const plan = await Plan.findById(planId);
+
+  if (!plan) return next(new AppError("Plan not found", 404));
+
+  if (plan.user.toString() !== req.user._id.toString()) {
+    return next(
+      new AppError("You are not authorized to update this plan", 403)
+    );
+  }
+
+  const locationIndex = plan.locations.findIndex(
+    (loc) => loc._id?.toString() === locationId
+  );
+  if (locationIndex === -1) {
+    return next(new AppError("Location not found in this plan", 404));
+  }
+
+  const newNote = {
+    location: plan.locations[locationIndex].location,
+    note: note.trim(),
+  };
+
+  plan.notes.push(newNote);
+  await plan.save();
+
+  return res.status(200).json({
+    status: "success",
+    message: "Note added to location successfully",
+    data: {
+      note: newNote,
+    },
+  });
+});
+
+// Add role-based notes to plan location
+export const addRoleBasedNotesToPlan = asyncHandler(async (req, res, next) => {
+  const { planId, locationId } = req.params;
+  const { note } = req.body;
+  const userRole = req.user.role;
+
+  // Validate input
+  if (!note || typeof note !== "string" || !note.trim()) {
+    return next(new AppError("Note content is required", 400));
+  }
+
+  try {
+    // Find the plan
+    const plan = await Plan.findById(planId);
+
+    if (!plan) {
+      return next(new AppError("Plan not found", 404));
     }
 
-    res.json(plans);
-  } catch (err) {
-    res
-      .status(500)
-      .json({ message: "Error fetching plans", error: err.message });
+    // Find the location in the plan
+    const locationIndex = plan.locations.findIndex(
+      (loc) => loc._id?.toString() === locationId
+    );
+
+    if (locationIndex === -1) {
+      return next(new AppError("Location not found in this plan", 404));
+    }
+
+    const locationObj = plan.locations[locationIndex].location;
+
+    // Create the note object
+    const noteObj = {
+      user: req.user._id,
+      location: locationObj,
+      type: note.trim(),
+    };
+
+    // Determine which notes array to update based on user role
+    let notesField;
+    switch (userRole) {
+      case "GM":
+        notesField = "gmNotes";
+        break;
+      case "LM":
+        notesField = "lmNotes";
+        break;
+      case "HR":
+        notesField = "hrNotes";
+        break;
+      case "DM":
+        notesField = "dmNotes";
+        break;
+      default:
+        return next(
+          new AppError("Your role does not have permission to add notes", 403)
+        );
+    }
+
+    // Check if the notes field is a string and convert it to an array if needed
+    if (typeof plan[notesField] === "string") {
+      // First, update the plan to convert the notes field from string to array
+      await Plan.findByIdAndUpdate(
+        planId,
+        { $set: { [notesField]: [] } },
+        { runValidators: false }
+      );
+
+      // Fetch the updated plan
+      const updatedPlan = await Plan.findById(planId);
+      if (!updatedPlan) {
+        return next(new AppError("Plan not found after update", 404));
+      }
+
+      // Check if the conversion was successful
+      if (typeof updatedPlan[notesField] === "string") {
+        return next(
+          new AppError(`Could not convert ${notesField} to array`, 500)
+        );
+      }
+    }
+
+    // Use $push to add the note to the appropriate array
+    const updateData = {
+      $push: { [notesField]: noteObj },
+    };
+
+    // Update the plan
+    await Plan.findByIdAndUpdate(planId, updateData, {
+      new: true,
+      runValidators: false,
+    });
+
+    return res.status(200).json({
+      status: "success",
+      message: `Note added to ${userRole} notes successfully`,
+      data: {
+        planId,
+        locationId,
+        role: userRole,
+        note: note.trim(),
+      },
+    });
+  } catch (error) {
+    return next(new AppError(`Error adding note: ${error.message}`, 500));
   }
-};
+});
+
+//Edit note in plan location
+export const editNoteInPlanLocation = asyncHandler(async (req, res, next) => {
+  const { planId, locationId, noteId } = req.params;
+  const { note } = req.body;
+
+  if (!note || typeof note !== "string" || !note.trim()) {
+    return next(new AppError("Note content is required", 400));
+  }
+
+  const plan = await Plan.findById(planId);
+
+  if (!plan) return next(new AppError("Plan not found", 404));
+
+  if (plan.user.toString() !== req.user._id.toString()) {
+    return next(
+      new AppError("You are not authorized to update this plan", 403)
+    );
+  }
+
+  const locationIndex = plan.locations.findIndex(
+    (loc) => loc._id?.toString() === locationId
+  );
+  if (locationIndex === -1) {
+    return next(new AppError("Location not found in this plan", 404));
+  }
+
+  const noteIndex = plan.notes.findIndex((n) => n._id?.toString() === noteId);
+  if (noteIndex === -1) {
+    return next(new AppError("Note not found in this plan", 404));
+  }
+
+  plan.notes[noteIndex].note = note.trim();
+  await plan.save();
+
+  return res.status(200).json({
+    status: "success",
+    message: "Note updated successfully",
+    data: {
+      note: plan.notes[noteIndex],
+    },
+  });
+});
+
+//Delete note in plan location
+export const deleteNoteInPlanLocation = asyncHandler(async (req, res, next) => {
+  const { planId, locationId, noteId } = req.params;
+
+  const plan = await Plan.findById(planId);
+
+  if (!plan) return next(new AppError("Plan not found", 404));
+
+  if (plan.user.toString() !== req.user._id.toString()) {
+    return next(
+      new AppError("You are not authorized to update this plan", 403)
+    );
+  }
+
+  const locationIndex = plan.locations.findIndex(
+    (loc) => loc._id?.toString() === locationId
+  );
+  if (locationIndex === -1) {
+    return next(new AppError("Location not found in this plan", 404));
+  }
+
+  const noteIndex = plan.notes.findIndex((n) => n._id?.toString() === noteId);
+  if (noteIndex === -1) {
+    return next(new AppError("Note not found in this plan", 404));
+  }
+
+  plan.notes.splice(noteIndex, 1);
+  await plan.save();
+
+  return res.status(200).json({
+    status: "success",
+    message: "Note deleted successfully",
+    data: {
+      noteId,
+    },
+  });
+});
