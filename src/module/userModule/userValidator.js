@@ -14,6 +14,10 @@ export const userValidationSchema = Joi.object({
   role: Joi.string()
     .required()
     .trim()
-    .valid("ADMIN", "GM", "LM", "DR", "HR", "R")
+    .valid("ADMIN", "GM", "LM", "DM", "HR", "R")
     .uppercase(),
+  governate: Joi.string().optional(),
+  LM: Joi.string().optional().allow(null, ""),
+  DM: Joi.string().optional().allow(null, ""),
+  kpi: Joi.number().optional().default(100),
 });

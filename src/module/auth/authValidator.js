@@ -17,8 +17,8 @@ export const adminCreateUserSchema = Joi.object({
     .valid("ADMIN", "GM", "LM", "DR", "HR", "R")
     .uppercase(),
   manager: Joi.string().optional(),
+  lineManager: Joi.string().optional().allow(null, ""),
 });
-
 
 export const loginSchema = Joi.object({
   email: Joi.string().email().required().trim().lowercase(),
@@ -44,4 +44,3 @@ export const publicRegisterSchema = Joi.object({
       )
     ),
 });
-

@@ -4,9 +4,9 @@ import AppError from "../../utils/AppError.js";
 import Plan from "../plan/plan.model.js";
 
 export const createUser = asyncHandler(async (req, res, next) => {
-  const { name, email, password, role } = req.body;
+  const { name, email, password, LM, DM, governate, role } = req.body;
 
-  if (!name || !email || !password || !role) {
+  if (!name || !email || !password || !role || !governate || !LM || !DM) {
     return next(new AppError("Please provide all required fields", 400));
   }
 
@@ -21,6 +21,9 @@ export const createUser = asyncHandler(async (req, res, next) => {
     email,
     password,
     role,
+    LM: LM || undefined,
+    DM: DM || undefined,
+    governate: governate || undefined,
   });
 
   if (user) {
@@ -101,8 +104,6 @@ export const getUserProfile = asyncHandler(async (req, res, next) => {
 });
 
 export const getUsersByRole = asyncHandler(async (req, res, next) => {
-  console.log(req.query.role);
-
   const users = await User.find({ role: req.query.role });
   res.status(200).json({
     status: "success",
