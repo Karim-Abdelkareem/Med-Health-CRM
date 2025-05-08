@@ -16,6 +16,7 @@ import {
   deleteNoteInPlanLocation,
   editNoteInPlanLocation,
   addRoleBasedNotesToPlan,
+  getPlanById,
 } from "./plan.controller.js";
 import auth from "../../middleware/authentication.js";
 
@@ -54,5 +55,7 @@ router.post(
   auth.protect,
   addRoleBasedNotesToPlan
 );
+
+router.get("/:id", auth.protect, getPlanById);
 
 export default router;

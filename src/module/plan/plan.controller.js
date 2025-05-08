@@ -4,6 +4,7 @@ import User from "../userModule/userModel.js";
 import { updateKPI } from "../userModule/userController.js";
 import asyncHandler from "express-async-handler";
 import AppError from "../../utils/AppError.js";
+import Notification from "../notification/notificationModel.js";
 
 // Helper function to create daily plans
 const createDailyPlans = async (weeklyPlan, region) => {
@@ -595,7 +596,9 @@ export const addRoleBasedNotesToPlan = asyncHandler(async (req, res, next) => {
 
   try {
     // Find the plan
-    const plan = await Plan.findById(planId);
+    const plan = await Plan.findById(planId)
+      .populate("user")
+      .populate("locations.location");
 
     if (!plan) {
       return next(new AppError("Plan not found", 404));
@@ -642,20 +645,17 @@ export const addRoleBasedNotesToPlan = asyncHandler(async (req, res, next) => {
 
     // Check if the notes field is a string and convert it to an array if needed
     if (typeof plan[notesField] === "string") {
-      // First, update the plan to convert the notes field from string to array
       await Plan.findByIdAndUpdate(
         planId,
         { $set: { [notesField]: [] } },
         { runValidators: false }
       );
 
-      // Fetch the updated plan
       const updatedPlan = await Plan.findById(planId);
       if (!updatedPlan) {
         return next(new AppError("Plan not found after update", 404));
       }
 
-      // Check if the conversion was successful
       if (typeof updatedPlan[notesField] === "string") {
         return next(
           new AppError(`Could not convert ${notesField} to array`, 500)
@@ -674,6 +674,27 @@ export const addRoleBasedNotesToPlan = asyncHandler(async (req, res, next) => {
       runValidators: false,
     });
 
+    // Create notification for the representative
+    const notificationTitle = `New Note from ${userRole}`;
+    const notificationMessage = `A new note has been added by ${req.user.name} on location ${plan.locations[locationIndex].location.locationName}`;
+
+    await Notification.create({
+      recipient: plan.user._id,
+      sender: req.user._id,
+      type: "plan_update",
+      title: notificationTitle,
+      message: notificationMessage,
+      priority: "medium",
+      actionUrl: `/location-details/${planId}/${plan.locations[locationIndex].location._id}`,
+      metadata: {
+        planId,
+        locationId,
+        noteType: userRole,
+        noteContent: note.trim(),
+        locationName: plan.locations[locationIndex].location.locationName,
+      },
+    });
+
     return res.status(200).json({
       status: "success",
       message: `Note added to ${userRole} notes successfully`,
@@ -689,7 +710,7 @@ export const addRoleBasedNotesToPlan = asyncHandler(async (req, res, next) => {
   }
 });
 
-//Edit note in plan location
+// Edit note in plan location
 export const editNoteInPlanLocation = asyncHandler(async (req, res, next) => {
   const { planId, locationId, noteId } = req.params;
   const { note } = req.body;
@@ -732,7 +753,7 @@ export const editNoteInPlanLocation = asyncHandler(async (req, res, next) => {
   });
 });
 
-//Delete note in plan location
+// Delete note in plan location
 export const deleteNoteInPlanLocation = asyncHandler(async (req, res, next) => {
   const { planId, locationId, noteId } = req.params;
 
@@ -768,4 +789,14 @@ export const deleteNoteInPlanLocation = asyncHandler(async (req, res, next) => {
       noteId,
     },
   });
+});
+
+// Get Plan by id
+export const getPlanById = asyncHandler(async (req, res, next) => {
+  const { id } = req.params;
+  const plan = await Plan.findById(id)
+    .populate("locations.location")
+    .populate("hrNotes.user");
+  if (!plan) return next(new AppError("Plan not found", 404));
+  res.status(200).json(plan);
 });

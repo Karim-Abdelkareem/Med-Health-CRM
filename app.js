@@ -4,10 +4,13 @@ import dotenv from "dotenv";
 import connectDB from "./src/config/database.js";
 import errorHandler from "./src/middleware/errorHandler.js";
 import userRoutes from "./src/module/userModule/userRoutes.js";
+import userProfileRoutes from "./src/module/userModule/userProfileRoutes.js";
 import authRoutes from "./src/module/auth/authRoutes.js";
 import planRoutes from "./src/module/plan/plan.routes.js";
 import locationRoutes from "./src/module/location/locationRoutes.js";
 import monthlyRoutes from "./src/module/monthlyPlan/monthlyRoutes.js";
+// import dashboardRoutes from "./src/module/dashboard/dashboardRoutes.js";
+import notificationRoutes from "./src/module/notification/notificationRoutes.js";
 import cors from "cors";
 
 // Load environment variables
@@ -28,10 +31,13 @@ app.use(cors());
 
 // Routes
 app.use("/api/users", userRoutes);
+app.use("/api/user", userProfileRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/plans", planRoutes);
 app.use("/api/locations", locationRoutes);
 app.use("/api/monthly-plans", monthlyRoutes);
+// app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 // Home Route
 app.get("/", (req, res) => {
