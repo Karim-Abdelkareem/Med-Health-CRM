@@ -800,3 +800,166 @@ export const getPlanById = asyncHandler(async (req, res, next) => {
   if (!plan) return next(new AppError("Plan not found", 404));
   res.status(200).json(plan);
 });
+
+//incomplete plan
+export const incompletePlanLocation = asyncHandler(async (req, res, next) => {
+  const { id, locationId } = req.params;
+  const { note } = req.body;
+  const userRole = req.user.role;
+
+  try {
+    // Find the plan with populated location data
+    const plan = await Plan.findById(id).populate("locations.location");
+
+    if (!plan) {
+      return next(new AppError("Plan not found", 404));
+    }
+
+    // Try to find by _id
+    let locationIndex = plan.locations.findIndex(
+      (loc) => loc._id && loc._id.toString() === locationId
+    );
+
+    // If not found, try to find by location field
+    if (locationIndex === -1) {
+      locationIndex = plan.locations.findIndex(
+        (loc) =>
+          loc.location &&
+          loc.location._id &&
+          loc.location._id.toString() === locationId
+      );
+    }
+
+    if (locationIndex === -1) {
+      return next(new AppError("Location not found in this plan", 404));
+    }
+
+    // Get the location object
+    const locationObj = plan.locations[locationIndex].location;
+    const locationName = locationObj.locationName || "Unknown Location";
+
+    // Check if notes is a string and convert it to an array if needed
+    if (typeof plan.notes === "string") {
+      // First, update the plan to convert notes from string to array
+      await Plan.findByIdAndUpdate(
+        id,
+        { $set: { notes: [] } },
+        { runValidators: false }
+      );
+    }
+
+    // Create an update object with only the fields we want to change
+    const updateData = {
+      $set: {
+        [`locations.${locationIndex}.status`]: "incomplete",
+      },
+    };
+
+    // Update the plan using findByIdAndUpdate to avoid validation issues with other fields
+    await Plan.findByIdAndUpdate(id, updateData, {
+      new: true,
+      runValidators: false,
+    });
+
+    // Add a note if provided
+    if (note && note.trim()) {
+      // Determine which notes array to update based on user role
+      let notesField;
+      switch (userRole) {
+        case "GM":
+          notesField = "gmNotes";
+          break;
+        case "LM":
+          notesField = "lmNotes";
+          break;
+        case "HR":
+          notesField = "hrNotes";
+          break;
+        case "DM":
+          notesField = "dmNotes";
+          break;
+        default:
+          notesField = "notes";
+      }
+
+      // Check if the notes field is a string and convert it to an array if needed
+      if (typeof plan[notesField] === "string") {
+        await Plan.findByIdAndUpdate(
+          id,
+          { $set: { [notesField]: [] } },
+          { runValidators: false }
+        );
+      }
+
+      // Create the note object
+      const noteObj = {
+        user: req.user._id,
+        location: locationObj._id || locationObj,
+        type: note.trim(),
+      };
+
+      // If it's a regular note (not role-based), use a different structure
+      if (notesField === "notes") {
+        await Plan.findByIdAndUpdate(
+          id,
+          {
+            $push: {
+              notes: {
+                location: locationObj._id || locationObj,
+                note: note.trim(),
+              },
+            },
+          },
+          { runValidators: false }
+        );
+      } else {
+        // Add the note to the appropriate role-based notes array
+        await Plan.findByIdAndUpdate(
+          id,
+          { $push: { [notesField]: noteObj } },
+          { runValidators: false }
+        );
+      }
+    }
+
+    // Create notification for the plan owner
+    const notificationTitle = `Location Status Changed by ${userRole}`;
+    const notificationMessage = `Location "${locationName}" has been marked as Incompleted by ${req.user.name}`;
+
+    await Notification.create({
+      recipient: plan.user._id,
+      sender: req.user._id,
+      type: "plan_update",
+      title: notificationTitle,
+      message: notificationMessage,
+      priority: "high",
+      actionUrl: `/location-details/${id}/${locationObj._id || locationId}`,
+      metadata: {
+        planId: id,
+        locationId: locationObj._id ? locationObj._id.toString() : locationId,
+        statusChange: "incomplete",
+        changedBy: userRole,
+        noteContent: note ? note.trim() : null,
+        locationName: locationName,
+      },
+    });
+
+    return res.status(200).json({
+      status: "success",
+      message: "Location marked as incomplete successfully",
+      data: {
+        planId: plan._id,
+        locationId,
+        noteAdded: note ? true : false,
+        notification: {
+          title: notificationTitle,
+          message: notificationMessage,
+        },
+      },
+    });
+  } catch (error) {
+    return next(
+      new AppError(`Error updating location status: ${error.message}`, 500)
+    );
+  }
+});
