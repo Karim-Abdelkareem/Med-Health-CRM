@@ -25,5 +25,12 @@ router
   .delete(userController.deleteUser);
 
 router.get("/get/role", auth.protect, userController.getUsersByRole);
+router.get("/get/emp", auth.protect, userController.getAllEmployees);
+router.patch(
+  "/deactivate/:userId",
+  auth.protect,
+  userController.deactivateUser
+);
+
 
 export default router;

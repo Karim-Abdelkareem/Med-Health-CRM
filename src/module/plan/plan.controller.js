@@ -6,115 +6,6 @@ import asyncHandler from "express-async-handler";
 import AppError from "../../utils/AppError.js";
 import Notification from "../notification/notificationModel.js";
 
-// Helper function to create daily plans
-const createDailyPlans = async (weeklyPlan, region) => {
-  const dailyPlans = [];
-
-  // Create 7 daily plans for each week
-  for (let i = 0; i < 7; i++) {
-    let dailyPlan = {
-      type: "daily",
-      date: new Date(weeklyPlan.date.getTime() + i * 24 * 60 * 60 * 1000),
-      region: [],
-      tasks: weeklyPlan.tasks || [],
-      notes: weeklyPlan.notes,
-    };
-
-    // Add 12 regions (visits) per daily plan
-    for (let j = 0; j < 12; j++) {
-      dailyPlan.region.push({
-        location: region.location,
-        doctorName: region.doctorName,
-        latitude: region.latitude,
-        longitude: region.longitude,
-        visitTime: region.visitTime,
-      });
-    }
-
-    const newDailyPlan = await Plan.create(dailyPlan);
-    dailyPlans.push(newDailyPlan);
-  }
-
-  return dailyPlans;
-};
-
-// Create a new plan (monthly, weekly, or daily)
-export const createPlan = async (req, res) => {
-  try {
-    const { type, date, tasks, region, notes } = req.body;
-    let warningMessage = null;
-
-    if (type === "daily" && region.length < 10) {
-      warningMessage = "You should have at least 10 locations for daily plan";
-    }
-
-    const newPlan = await Plan.create({
-      user: req.user._id,
-      type,
-      date,
-      region: region || undefined,
-      tasks: tasks || undefined,
-      notes,
-    });
-
-    if (type === "monthly") {
-      // Automatically create 4 weekly plans for monthly plan
-      const weeklyPlans = await createWeeklyPlans(newPlan, region);
-      return res.status(201).json({
-        success: true,
-        message: "Monthly plan created successfully",
-        data: newPlan,
-        warning: warningMessage,
-      });
-    }
-
-    if (type === "weekly") {
-      // Automatically create 7 daily plans for weekly plan
-      const dailyPlans = await createDailyPlans(newPlan, region);
-      return res.status(201).json({
-        success: true,
-        message: "Weekly plan created successfully",
-        data: dailyPlans,
-        warning: warningMessage,
-      });
-    }
-
-    res.status(201).json({
-      success: true,
-      message: "Plan created successfully",
-      data: newPlan,
-      warning: warningMessage,
-    });
-  } catch (err) {
-    res.status(500).json({
-      success: false,
-      message: "Error creating plan",
-      error: err.message,
-    });
-  }
-};
-
-// Create weekly plans for monthly plan
-const createWeeklyPlans = async (monthlyPlan, region) => {
-  const weeklyPlans = [];
-  for (let i = 0; i < 4; i++) {
-    let weeklyPlan = {
-      type: "weekly",
-      date: new Date(monthlyPlan.date.getTime() + i * 7 * 24 * 60 * 60 * 1000), // Offset by one week for each plan
-      region: region || [],
-      tasks: monthlyPlan.tasks || [],
-      notes: monthlyPlan.notes,
-    };
-
-    const newWeeklyPlan = await Plan.create(weeklyPlan);
-    weeklyPlans.push(newWeeklyPlan);
-
-    // Automatically create 7 daily plans for each weekly plan
-    await createDailyPlans(newWeeklyPlan, region);
-  }
-  return weeklyPlans;
-};
-
 // Get all plans of the current user filtered by type
 export const getMyPlans = async (req, res) => {
   const { type } = req.query;
@@ -286,10 +177,10 @@ export const getPlansByHierarchy = async (req, res) => {
 // Update visited region information in a plan
 export const updateVisitedRegion = asyncHandler(async (req, res, next) => {
   const { id, locationId } = req.params;
-  const { visitedLatitude, visitedLongitude } = req.body;
+  const { startLatitude, startLongitude } = req.body;
 
   // Validate input
-  if (!visitedLatitude || !visitedLongitude) {
+  if (!startLatitude || !startLongitude) {
     return next(
       new AppError("Please provide both latitude and longitude", 400)
     );
@@ -346,10 +237,9 @@ export const updateVisitedRegion = asyncHandler(async (req, res, next) => {
     // Create an update object with only the fields we want to change
     const updateData = {
       $set: {
-        [`locations.${locationIndex}.status`]: "completed",
-        [`locations.${locationIndex}.visitedLatitude`]: visitedLatitude,
-        [`locations.${locationIndex}.visitedLongitude`]: visitedLongitude,
-        [`locations.${locationIndex}.visitedDate`]: new Date(),
+        [`locations.${locationIndex}.startLatitude`]: startLatitude,
+        [`locations.${locationIndex}.startLongitude`]: startLongitude,
+        [`locations.${locationIndex}.startDate`]: new Date(),
       },
     };
 
@@ -365,9 +255,9 @@ export const updateVisitedRegion = asyncHandler(async (req, res, next) => {
       data: {
         planId: plan._id,
         locationId,
-        visitedLatitude,
-        visitedLongitude,
-        visitedDate: new Date(),
+        startLatitude,
+        startLongitude,
+        startDate: new Date(),
       },
     });
   } catch (error) {
@@ -375,6 +265,81 @@ export const updateVisitedRegion = asyncHandler(async (req, res, next) => {
       new AppError(`Error updating location status: ${error.message}`, 500)
     );
   }
+});
+
+//End the Visit
+export const endVisitedRegion = asyncHandler(async (req, res, next) => {
+  const { id, locationId } = req.params;
+  const { endLatitude, endLongitude } = req.body;
+
+  // Validate input
+  if (!endLatitude || !endLongitude) {
+    return next(
+      new AppError("Please provide both latitude and longitude", 400)
+    );
+  }
+
+  // Find the plan
+  const plan = await Plan.findById(id);
+
+  if (!plan) {
+    return next(new AppError("Plan not Found", 404));
+  }
+
+  if (plan.user.toString() !== req.user._id.toString()) {
+    return next(
+      new AppError("You are not authorized to update this plan", 403)
+    );
+  }
+  let locationIndex = plan.locations.findIndex(
+    (loc) => loc._id && loc._id.toString() === locationId
+  );
+  // If not found, try to find by location field
+  if (locationIndex === -1) {
+    locationIndex = plan.locations.findIndex(
+      (loc) => loc.location && loc.location.toString() === locationId
+    );
+  }
+
+  if (locationIndex === -1) {
+    return next(new AppError("Location not found in this plan", 404));
+  }
+  if (typeof plan.notes === "string") {
+    // First, update the plan to convert notes from string to array
+    await Plan.findByIdAndUpdate(
+      id,
+      { $set: { notes: [] } },
+      { runValidators: false }
+    );
+  }
+
+  // Create an update object with only the fields we want to change
+  const updateData = {
+    $set: {
+      [`locations.${locationIndex}.status`]: "completed",
+      [`locations.${locationIndex}.endLatitude`]: endLatitude,
+      [`locations.${locationIndex}.endLongitude`]: endLongitude,
+      [`locations.${locationIndex}.endDate`]: new Date(),
+    },
+  };
+
+  // Update the plan using findByIdAndUpdate to avoid validation issues with other fields
+  await Plan.findByIdAndUpdate(id, updateData, {
+    new: true,
+    runValidators: false,
+  });
+
+  return res.status(200).json({
+    status: "success",
+    message: "Location marked as completed successfully",
+    data: {
+      planId: plan._id,
+      locationId,
+      endLatitude,
+      endLongitude,
+      endDate: new Date(),
+    },
+  });
 });
 
 // Unvisit region in a plan

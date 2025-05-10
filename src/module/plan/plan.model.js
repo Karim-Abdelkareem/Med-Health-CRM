@@ -17,20 +17,12 @@ const planSchema = new mongoose.Schema(
           enum: ["completed", "incomplete"],
           default: "incomplete",
         },
-        visitedLatitude: { type: Number },
-        visitedLongitude: { type: Number },
-        visitedDate: { type: Date },
-      },
-    ],
-
-    tasks: [
-      {
-        task: { type: String, required: true },
-        status: {
-          type: String,
-          enum: ["completed", "incomplete"],
-          default: "pending",
-        },
+        startLatitude: { type: Number },
+        startLongitude: { type: Number },
+        startDate: { type: Date },
+        endLatitude: { type: Number },
+        endLongitude: { type: Number },
+        endDate: { type: Date },
       },
     ],
     notes: [
