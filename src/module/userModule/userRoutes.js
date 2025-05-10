@@ -32,4 +32,5 @@ router.patch(
   userController.deactivateUser
 );
 
+
 export default router;
