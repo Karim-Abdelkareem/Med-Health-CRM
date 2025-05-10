@@ -21,7 +21,7 @@ export const createUser = asyncHandler(async (req, res, next) => {
     email,
     password,
     role,
-    LM: LM || undefined,
+    LM: LM || undefined,  
     DM: DM || undefined,
     governate: governate || undefined,
   });
