@@ -29,10 +29,6 @@ export const updatePlan = async (req, res) => {
 
     if (!plan) return res.status(404).json({ message: "Plan not found" });
 
-    if (plan.user.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: "Unauthorized" });
-    }
-
     const updatedPlan = await Plan.findByIdAndUpdate(id, req.body, {
       new: true,
     });
