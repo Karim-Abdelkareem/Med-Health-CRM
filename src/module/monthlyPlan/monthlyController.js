@@ -2,6 +2,7 @@ import monthlyModel from "./monthlyModel.js";
 import asyncHandler from "express-async-handler";
 import AppError from "../../utils/AppError.js";
 import Plan from "../plan/plan.model.js";
+import mongoose from "mongoose";
 
 export const createMonthlyPlan = asyncHandler(async (req, res, next) => {
   const { startDate, endDate, plans, notes } = req.body;
@@ -112,4 +113,61 @@ export const getCurrentMonthPlans = asyncHandler(async (req, res, next) => {
     status: "success",
     data: monthlyPlan,
   });
+});
+
+export const deleteMonthlyPlan = asyncHandler(async (req, res, next) => {
+  const { id } = req.params;
+
+  // Check if ID is valid
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return next(new AppError("Invalid monthly plan ID", 400));
+  }
+
+  // Find the monthly plan
+  const monthlyPlan = await monthlyModel.findById(id);
+
+  if (!monthlyPlan) {
+    return next(new AppError("Monthly plan not found", 404));
+  }
+
+  // Check if the user is authorized to delete this plan
+  if (monthlyPlan.user.toString() !== req.user._id.toString()) {
+    return next(
+      new AppError("You are not authorized to delete this plan", 403)
+    );
+  }
+
+  // Get all plan IDs associated with this monthly plan
+  const planIds = monthlyPlan.plans;
+
+  // Start a session for transaction
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    // Delete all individual plans
+    if (planIds && planIds.length > 0) {
+      // Use the plan IDs directly - Mongoose can handle ObjectIds
+      await Plan.deleteMany({ _id: { $in: planIds } }, { session });
+    }
+
+    // Delete the monthly plan
+    await monthlyModel.findByIdAndDelete(id, { session });
+
+    // Commit the transaction
+    await session.commitTransaction();
+    session.endSession();
+
+    res.status(200).json({
+      status: "success",
+      message: "Monthly plan and all associated plans deleted successfully",
+    });
+  } catch (error) {
+    // Abort transaction in case of error
+    await session.abortTransaction();
+    session.endSession();
+    return next(
+      new AppError(`Error deleting monthly plan: ${error.message}`, 500)
+    );
+  }
 });

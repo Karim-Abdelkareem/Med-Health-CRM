@@ -52,8 +52,7 @@ export const getAllUsers = asyncHandler(async (req, res, next) => {
 });
 
 export const getUserById = asyncHandler(async (req, res, next) => {
-  const user = await User.findById(req.params.id);
-
+  const user = await User.findById(req.params.userId);
   if (user) {
     res.status(200).json({
       status: "success",
@@ -64,7 +63,7 @@ export const getUserById = asyncHandler(async (req, res, next) => {
 });
 
 export const updateUser = asyncHandler(async (req, res, next) => {
-  const user = await User.findByIdAndUpdate(req.params.id, req.body, {
+  const user = await User.findByIdAndUpdate(req.params.userId, req.body, {
     new: true,
     runValidators: true,
   });
@@ -109,6 +108,27 @@ export const getUsersByRole = asyncHandler(async (req, res, next) => {
     status: "success",
     message: "Users fetched successfully",
     data: users,
+  });
+});
+
+export const getAllEmployees = asyncHandler(async (req, res, next) => {
+  const users = await User.find({ role: { $nin: ["HR", "GM"] } });
+  res.status(200).json({
+    status: "success",
+    message: "Users fetched successfully",
+    data: users,
+  });
+});
+
+export const deactivateUser = asyncHandler(async (req, res, next) => {
+  const { userId } = req.params;
+  const user = await User.findById(userId);
+  if (!user) return next(new AppError("User No Longer Exist!", 404));
+  user.active = !user.active;
+  await user.save();
+  res.status(200).json({
+    status: "success",
+    message: `User ${user.active ? "activated" : "deactivated"} successfully`,
   });
 });
 

@@ -36,6 +36,10 @@ const userSchema = new mongoose.Schema(
       enum: ["ADMIN", "GM", "LM", "DM", "HR", "R"],
       default: "R",
     },
+    active: {
+      type: Boolean,
+      default: true,
+    },
     kpi: { type: Number, default: 100 },
   },
   {

@@ -1,7 +1,6 @@
 // src/module/plan/plan.routes.js
 import express from "express";
 import {
-  createPlan,
   getMyPlans,
   getMyPlansByFilter,
   updatePlan,
@@ -9,6 +8,7 @@ import {
   addManagerNote,
   getPlansByHierarchy,
   updateVisitedRegion,
+  endVisitedRegion,
   unvisitRegion,
   getMonthlyPlans,
   addNotesToPlanLocation,
@@ -23,7 +23,6 @@ import auth from "../../middleware/authentication.js";
 
 const router = express.Router();
 
-router.post("/", auth.protect, createPlan);
 router.get("/all", auth.protect, getMyPlans);
 router.get("/", auth.protect, getMyPlansByFilter);
 router.put("/:id", auth.protect, updatePlan);
@@ -31,6 +30,7 @@ router.delete("/:id", auth.protect, deletePlan);
 router.patch("/:id/manager-note", auth.protect, addManagerNote);
 router.get("/all-under-me", auth.protect, getPlansByHierarchy);
 router.put("/complete/:id/:locationId", auth.protect, updateVisitedRegion);
+router.put("/end-visit/:id/:locationId", auth.protect, endVisitedRegion);
 router.put("/unvisit/:id/:locationId", auth.protect, unvisitRegion);
 router.get("/monthly", auth.protect, getMonthlyPlans);
 router.get("/by-visit-date", auth.protect, getPlansByVisitDate);

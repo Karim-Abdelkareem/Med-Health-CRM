@@ -22,33 +22,20 @@ export const getUserProfile = asyncHandler(async (req, res) => {
 
 // تحديث الملف الشخصي للمستخدم
 export const updateUserProfile = asyncHandler(async (req, res) => {
-  const { name, email, phone, address, avatar } = req.body;
-
   const user = await User.findById(req.user._id);
   if (!user) {
     throw new AppError("User not found", 404);
   }
 
-  // تحديث البيانات الأساسية
-  if (name) user.name = name;
-  if (email) user.email = email;
-  if (phone) user.phone = phone;
-  if (address) user.address = address;
-  if (avatar) user.avatar = avatar;
-
-  await user.save();
+  // تحديث البيانات
+  const newUser = await User.findByIdAndUpdate(req.user._id, req.body, {
+    new: true,
+    runValidators: true,
+  });
 
   res.status(200).json({
     status: "success",
-    data: {
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      phone: user.phone,
-      address: user.address,
-      avatar: user.avatar,
-      role: user.role,
-    },
+    data: { newUser },
   });
 });
 

@@ -20,4 +20,5 @@ export const userValidationSchema = Joi.object({
   LM: Joi.string().optional().allow(null, ""),
   DM: Joi.string().optional().allow(null, ""),
   kpi: Joi.number().optional().default(100),
+  active: Joi.boolean().default(true),
 });
