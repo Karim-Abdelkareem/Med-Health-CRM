@@ -101,6 +101,24 @@ export const getCurrentMonthPlans = asyncHandler(async (req, res, next) => {
       populate: {
         path: "hrNotes.location hrNotes.user",
       },
+    })
+    .populate({
+      path: "plans",
+      populate: {
+        path: "lmNotes.location lmNotes.user",
+      },
+    })
+    .populate({
+      path: "plans",
+      populate: {
+        path: "gmNotes.location gmNotes.user",
+      },
+    })
+    .populate({
+      path: "plans",
+      populate: {
+        path: "dmNotes.location dmNotes.user",
+      },
     });
 
   if (!monthlyPlan) {

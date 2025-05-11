@@ -24,6 +24,10 @@ const userSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
+    Area: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
     DM: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -33,7 +37,7 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ["ADMIN", "GM", "LM", "DM", "HR", "R"],
+      enum: ["ADMIN", "GM", "LM", "Area", "DM", "HR", "R"],
       default: "R",
     },
     active: {

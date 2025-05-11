@@ -580,7 +580,7 @@ export const addRoleBasedNotesToPlan = asyncHandler(async (req, res, next) => {
     const noteObj = {
       user: req.user._id,
       location: locationObj,
-      type: note.trim(),
+      note: note.trim(),
     };
 
     // Determine which notes array to update based on user role
