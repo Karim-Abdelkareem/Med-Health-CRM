@@ -13,9 +13,15 @@ router
   .get(userController.getUserProfile);
 
 router.get(
-  "/calculate-kpi",
+  "/calculate-kpi", 
   auth.protect,
   userController.calculateKPIForAllEmployees
+);
+
+router.get(
+  "/calculate-kpi/:userId", 
+  auth.protect,
+  userController.calculateKPIForOneEmployee 
 );
 
 router
