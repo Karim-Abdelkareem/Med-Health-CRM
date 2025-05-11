@@ -13,15 +13,27 @@ router
   .get(userController.getUserProfile);
 
 router.get(
-  "/calculate-kpi", 
+  "/calculate-kpi",
   auth.protect,
   userController.calculateKPIForAllEmployees
 );
 
 router.get(
-  "/calculate-kpi/:userId", 
+  "/calculate-kpi/:userId",
   auth.protect,
-  userController.calculateKPIForOneEmployee 
+  userController.calculateKPIForOneEmployee
+);
+
+router.get(
+  "/monthly-kpi-stats",
+  auth.protect,
+  userController.getMonthlyKPIStats
+);
+
+router.get(
+  "/monthly-kpi-stats/:userId",
+  auth.protect,
+  userController.getMonthlyKPIStats
 );
 
 router
