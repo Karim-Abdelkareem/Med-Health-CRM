@@ -13,15 +13,7 @@ const notificationSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: [
-        "appointment",
-        "plan_update",
-        "payment",
-        "system",
-        "task",
-        "message",
-        "alert",
-      ],
+      enum: ["plan_update", "message", "holiday_request"],
       required: true,
     },
     title: {

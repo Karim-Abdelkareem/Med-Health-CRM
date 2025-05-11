@@ -924,3 +924,16 @@ export const incompletePlanLocation = asyncHandler(async (req, res, next) => {
     );
   }
 });
+
+//Get User Plans
+export const getUserPlans = asyncHandler(async (req, res, next) => {
+  const { id } = req.params;
+  const plans = await Plan.find({ user: id }).sort({
+    visitDate: 1,
+  });
+  res.status(200).json({
+    status: "success",
+    message: "User plans fetched successfully",
+    data: plans,
+  });
+});

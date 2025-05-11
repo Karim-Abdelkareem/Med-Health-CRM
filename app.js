@@ -11,6 +11,7 @@ import locationRoutes from "./src/module/location/locationRoutes.js";
 import monthlyRoutes from "./src/module/monthlyPlan/monthlyRoutes.js";
 // import dashboardRoutes from "./src/module/dashboard/dashboardRoutes.js";
 import notificationRoutes from "./src/module/notification/notificationRoutes.js";
+import holidayRoutes from "./src/module/Holidays/holidayRouter.js";
 import cors from "cors";
 
 // Load environment variables
@@ -38,6 +39,7 @@ app.use("/api/locations", locationRoutes);
 app.use("/api/monthly-plans", monthlyRoutes);
 // app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/holidays", holidayRoutes);
 
 // Home Route
 app.get("/", (req, res) => {

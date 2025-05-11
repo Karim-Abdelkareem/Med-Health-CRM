@@ -18,6 +18,7 @@ import {
   addRoleBasedNotesToPlan,
   getPlanById,
   incompletePlanLocation,
+  getUserPlans,
 } from "./plan.controller.js";
 import auth from "../../middleware/authentication.js";
 
@@ -59,5 +60,6 @@ router.post(
 
 router.get("/:id", auth.protect, getPlanById);
 router.put("/incomplete/:id/:locationId", auth.protect, incompletePlanLocation);
+router.get("/user/:id", auth.protect, getUserPlans);
 
 export default router;
