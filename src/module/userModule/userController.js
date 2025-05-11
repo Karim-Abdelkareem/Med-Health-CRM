@@ -18,7 +18,7 @@ export const createUser = asyncHandler(async (req, res, next) => {
     email,
     password,
     role,
-    LM: LM || undefined,  
+    LM: LM || undefined,
     DM: DM || undefined,
     governate: governate || undefined,
   });
@@ -188,13 +188,14 @@ export const deactivateUser = asyncHandler(async (req, res, next) => {
   });
 });
 
-function calculateKPI(visitsCount) {
+function calculateKPI(visitsCount, completedVisits, workingDays = 26, requiredPerDay = 12) {
   const kpiBase = 100;
+  const requiredVisits = workingDays * requiredPerDay;
 
-  if (visitsCount >= 10) {
+  if (completedVisits >= requiredVisits) {
     return kpiBase;
   } else {
-    const penalty = 0.1;
+    const penalty = 0.15;
     const reducedKPI = kpiBase * (1 - penalty);
     return reducedKPI;
   }
@@ -208,7 +209,8 @@ export const updateKPI = async (userId, visitsCount) => {
       throw new Error("User not found");
     }
 
-    const newKPI = calculateKPI(visitsCount);
+    const completedVisits = visitsCount.filter(visit => visit.status === "completed").length;
+    const newKPI = calculateKPI(visitsCount.length, completedVisits);
 
     user.kpi = newKPI;
     await user.save();
@@ -220,14 +222,18 @@ export const updateKPI = async (userId, visitsCount) => {
 };
 
 export const calculateMonthlyKPI = async (userId) => {
-  const plans = await Plan.find({ user: userId, type: "monthly" });
+  const plans = await Plan.find({ user: userId, type: "daily" });
 
   let totalVisits = 0;
+  let completedVisits = 0;
+
   plans.forEach((plan) => {
-    totalVisits += plan.region.length;
+    totalVisits += plan.locations.length;
+    completedVisits += plan.locations.filter(visit => visit.status === "completed").length;
   });
 
-  const kpi = totalVisits * 10;
+  const workingDays = plans.length;
+  const kpi = calculateKPI(totalVisits, completedVisits, workingDays);
 
   const user = await User.findById(userId);
   user.kpi = kpi;
@@ -263,16 +269,16 @@ export const calculateKPIForAllEmployees = async (req, res) => {
         date: { $gte: startOfMonth, $lt: endOfMonth },
       });
 
-      const totalVisits = plans.reduce(
-        (sum, plan) => sum + (plan.region.length || 0),
-        0
-      );
-      const maxExpectedVisits = plans.length * 10;
+      let totalVisits = 0;
+      let completedVisits = 0;
 
-      let kpi = 100;
-      if (maxExpectedVisits > 0) {
-        kpi = Math.round((totalVisits / maxExpectedVisits) * 100);
-      }
+      plans.forEach((plan) => {
+        totalVisits += plan.locations.length;
+        completedVisits += plan.locations.filter(visit => visit.status === "completed").length;
+      });
+
+      const workingDays = plans.length;
+      const kpi = calculateKPI(totalVisits, completedVisits, workingDays);
 
       employee.kpi = kpi;
       await employee.save();
@@ -281,8 +287,9 @@ export const calculateKPIForAllEmployees = async (req, res) => {
         employeeId: employee._id,
         name: employee.name,
         email: employee.email,
-        totalPlans: plans.length,
+        totalPlans: workingDays,
         totalVisits,
+        completedVisits,
         kpi,
       });
     }
@@ -297,6 +304,36 @@ export const calculateKPIForAllEmployees = async (req, res) => {
       success: false,
       message: "حدث خطأ أثناء حساب KPI",
       error: err.message,
+    });
+  }
+};
+
+export const calculateKPIForOneEmployee = async (req, res) => {
+  const { userId } = req.params;
+
+  try {
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    const kpi = await calculateMonthlyKPI(userId); 
+
+    res.status(200).json({
+      success: true,
+      message: "تم حساب KPI للمستخدم",
+      data: {
+        userId: user._id,
+        name: user.name,
+        email: user.email,
+        kpi
+      }
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: "حدث خطأ أثناء حساب KPI",
+      error: err.message
     });
   }
 };
