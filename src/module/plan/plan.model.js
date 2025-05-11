@@ -47,7 +47,7 @@ const planSchema = new mongoose.Schema(
           ref: "Location",
           required: true,
         },
-        type: { type: String },
+        note: { type: String },
       },
     ],
     lmNotes: [
@@ -62,7 +62,7 @@ const planSchema = new mongoose.Schema(
           ref: "Location",
           required: true,
         },
-        type: { type: String },
+        note: { type: String },
       },
     ],
     hrNotes: [
@@ -77,7 +77,7 @@ const planSchema = new mongoose.Schema(
           ref: "Location",
           required: true,
         },
-        type: { type: String },
+        note: { type: String },
       },
     ],
     dmNotes: [
@@ -92,7 +92,7 @@ const planSchema = new mongoose.Schema(
           ref: "Location",
           required: true,
         },
-        type: { type: String },
+        note: { type: String },
       },
     ],
   },

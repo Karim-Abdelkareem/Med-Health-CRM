@@ -8,7 +8,7 @@ const router = express.Router();
 
 router
   .route("/")
-  .post(validate(userValidationSchema), userController.createUser)
+  .post(userController.createUser)
   .get(userController.getAllUsers)
   .get(userController.getUserProfile);
 
@@ -31,6 +31,5 @@ router.patch(
   auth.protect,
   userController.deactivateUser
 );
-
 
 export default router;

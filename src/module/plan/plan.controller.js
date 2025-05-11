@@ -29,10 +29,6 @@ export const updatePlan = async (req, res) => {
 
     if (!plan) return res.status(404).json({ message: "Plan not found" });
 
-    if (plan.user.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: "Unauthorized" });
-    }
-
     const updatedPlan = await Plan.findByIdAndUpdate(id, req.body, {
       new: true,
     });
@@ -584,7 +580,7 @@ export const addRoleBasedNotesToPlan = asyncHandler(async (req, res, next) => {
     const noteObj = {
       user: req.user._id,
       location: locationObj,
-      type: note.trim(),
+      note: note.trim(),
     };
 
     // Determine which notes array to update based on user role

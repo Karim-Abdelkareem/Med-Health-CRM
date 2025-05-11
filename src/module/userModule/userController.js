@@ -5,10 +5,7 @@ import Plan from "../plan/plan.model.js";
 
 export const createUser = asyncHandler(async (req, res, next) => {
   const { name, email, password, LM, DM, governate, role } = req.body;
-
-  if (!name || !email || !password || !role || !governate || !LM || !DM) {
-    return next(new AppError("Please provide all required fields", 400));
-  }
+  console.log(req.body);
 
   const userExists = await User.findOne({ email });
 
@@ -103,12 +100,71 @@ export const getUserProfile = asyncHandler(async (req, res, next) => {
 });
 
 export const getUsersByRole = asyncHandler(async (req, res, next) => {
-  const users = await User.find({ role: req.query.role });
-  res.status(200).json({
-    status: "success",
-    message: "Users fetched successfully",
-    data: users,
-  });
+  const userId = req.user._id;
+  switch (req.user.role) {
+    case "GM":
+      const gmUsers = await User.find({
+        role: req.query.role,
+        _id: { $ne: userId },
+      });
+      return res.status(200).json({
+        status: "success",
+        message: "Users fetched successfully",
+        data: gmUsers,
+      });
+      break;
+    case "HR":
+      const HRUsers = await User.find({
+        role: req.query.role,
+        _id: { $ne: userId },
+      });
+      return res.status(200).json({
+        status: "success",
+        message: "Users fetched successfully",
+        data: HRUsers,
+      });
+      break;
+    case "LM":
+      const LMUsers = await User.find({
+        role: req.query.role,
+        LM: req.user._id,
+        _id: { $ne: req.user._id },
+      });
+      return res.status(200).json({
+        status: "success",
+        message: "Users fetched successfully",
+        data: LMUsers,
+      });
+      break;
+    case "Area":
+      const AreaUsers = await User.find({
+        role: req.query.role,
+        Area: req.user._id,
+        _id: { $ne: userId },
+      });
+      return res.status(200).json({
+        status: "success",
+        message: "Users fetched successfully",
+        data: AreaUsers,
+      });
+      break;
+    case "DM":
+      const DMUsers = await User.find({
+        role: req.query.role,
+        DM: req.user._id,
+        _id: { $ne: userId },
+      });
+      return res.status(200).json({
+        status: "success",
+        message: "Users fetched successfully",
+        data: DMUsers,
+      });
+      break;
+    default:
+      return next(
+        new AppError("You are not authorized to access this route", 403)
+      );
+  }
 });
 
 export const getAllEmployees = asyncHandler(async (req, res, next) => {

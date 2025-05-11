@@ -8,7 +8,8 @@ export const getUserProfile = asyncHandler(async (req, res) => {
   const user = await User.findById(req.user._id)
     .select("-password")
     .populate("DM", "name email")
-    .populate("LM", "name email");
+    .populate("LM", "name email")
+    .populate("Area", "name email");
 
   if (!user) {
     throw new AppError("User not found", 404);
