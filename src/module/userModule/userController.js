@@ -195,7 +195,7 @@ function calculateKPI(
   requiredPerDay = 12
 ) {
   const kpiBase = 100;
-  const requiredVisits = workingDays * requiredPerDay;
+  const minRequiredVisits = requiredMonthly * requiredPercentage; // 220 * 0.9 = 198
 
   // Calculate completion percentage
   const completionPercentage = (completedVisits / requiredVisits) * 100;
@@ -209,10 +209,10 @@ function calculateKPI(
   } else {
     // Apply penalty if less than 85% of visits completed
     const penalty = 0.15;
-    const reducedKPI = kpiBase * (1 - penalty);
-    return reducedKPI;
+    return kpiBase * (1 - penalty); // 85
   }
 }
+
 
 export const updateKPI = async (userId, visitsCount) => {
   try {
@@ -237,7 +237,18 @@ export const updateKPI = async (userId, visitsCount) => {
 };
 
 export const calculateMonthlyKPI = async (userId) => {
-  const plans = await Plan.find({ user: userId, type: "daily" });
+  const startOfMonth = new Date();
+  startOfMonth.setDate(1);
+  startOfMonth.setHours(0, 0, 0, 0);
+
+  const endOfMonth = new Date(startOfMonth);
+  endOfMonth.setMonth(endOfMonth.getMonth() + 1);
+
+  const plans = await Plan.find({
+    user: userId,
+    type: "daily",
+    date: { $gte: startOfMonth, $lt: endOfMonth },
+  });
 
   let totalVisits = 0;
   let completedVisits = 0;
@@ -249,8 +260,8 @@ export const calculateMonthlyKPI = async (userId) => {
     ).length;
   });
 
-  const workingDays = plans.length;
-  const kpi = calculateKPI(totalVisits, completedVisits, workingDays);
+  const requiredMonthly = 220;
+  const kpi = calculateKPI(totalVisits, completedVisits, requiredMonthly);
 
   const user = await User.findById(userId);
   user.kpi = kpi;
@@ -258,6 +269,7 @@ export const calculateMonthlyKPI = async (userId) => {
 
   return kpi;
 };
+
 
 export const calculateKPIForAllEmployees = async (req, res) => {
   try {
@@ -297,7 +309,7 @@ export const calculateKPIForAllEmployees = async (req, res) => {
       });
 
       const workingDays = plans.length;
-      const kpi = calculateKPI(totalVisits, completedVisits, workingDays);
+      const kpi = calculateKPI(totalVisits, completedVisits, 220);
 
       employee.kpi = kpi;
       await employee.save();
