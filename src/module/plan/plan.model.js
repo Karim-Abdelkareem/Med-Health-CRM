@@ -23,6 +23,8 @@ const planSchema = new mongoose.Schema(
         endLatitude: { type: Number },
         endLongitude: { type: Number },
         endDate: { type: Date },
+        takesFromUs: { type: Boolean, default: false },
+        amount: { type: Number },
       },
     ],
     notes: [

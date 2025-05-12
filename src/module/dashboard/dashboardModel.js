@@ -7,12 +7,7 @@ const dashboardSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
-    statistics: {
-      totalPatients: { type: Number, default: 0 },
-      activePlans: { type: Number, default: 0 },
-      monthlyRevenue: { type: Number, default: 0 },
-      pendingTasks: { type: Number, default: 0 },
-    },
+
     recentActivities: [
       {
         type: {

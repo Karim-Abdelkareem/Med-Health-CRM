@@ -101,7 +101,7 @@ export const approveRejectHoliday = asyncHandler(async (req, res, next) => {
   holiday.approvedBy.push(req.user._id);
 
   // If status is reject, set it directly
-  if (status === "reject") {
+  if (status === "rejected") {
     holiday.status = "rejected";
   } else {
     // Check if approvedBy array has 2 approvals after adding current user

@@ -266,7 +266,7 @@ export const updateVisitedRegion = asyncHandler(async (req, res, next) => {
 //End the Visit
 export const endVisitedRegion = asyncHandler(async (req, res, next) => {
   const { id, locationId } = req.params;
-  const { endLatitude, endLongitude } = req.body;
+  const { endLatitude, endLongitude, amount, takesFromUs } = req.body;
 
   // Validate input
   if (!endLatitude || !endLongitude) {
@@ -316,6 +316,8 @@ export const endVisitedRegion = asyncHandler(async (req, res, next) => {
       [`locations.${locationIndex}.endLatitude`]: endLatitude,
       [`locations.${locationIndex}.endLongitude`]: endLongitude,
       [`locations.${locationIndex}.endDate`]: new Date(),
+      [`locations.${locationIndex}.takesFromUs`]: takesFromUs,
+      [`locations.${locationIndex}.amount`]: amount,
     },
   };
 
@@ -334,6 +336,8 @@ export const endVisitedRegion = asyncHandler(async (req, res, next) => {
       endLatitude,
       endLongitude,
       endDate: new Date(),
+      takesFromUs,
+      amount,
     },
   });
 });
@@ -370,14 +374,6 @@ export const unvisitRegion = asyncHandler(async (req, res, next) => {
     }
 
     if (locationIndex === -1) {
-      // Log all location IDs for debugging
-      console.log(
-        "All location IDs:",
-        plan.locations.map((loc) => ({
-          _id: loc._id ? loc._id.toString() : "undefined",
-          location: loc.location ? loc.location.toString() : "undefined",
-        }))
-      );
       return next(new AppError("Location not found in this plan", 404));
     }
 
@@ -395,9 +391,14 @@ export const unvisitRegion = asyncHandler(async (req, res, next) => {
     const updateData = {
       $set: {
         [`locations.${locationIndex}.status`]: "incomplete",
-        [`locations.${locationIndex}.visitedLatitude`]: null,
-        [`locations.${locationIndex}.visitedLongitude`]: null,
-        [`locations.${locationIndex}.visitedDate`]: null,
+        [`locations.${locationIndex}.startLatitude`]: null,
+        [`locations.${locationIndex}.startLongitude`]: null,
+        [`locations.${locationIndex}.startDate`]: null,
+        [`locations.${locationIndex}.endLatitude`]: null,
+        [`locations.${locationIndex}.endLongitude`]: null,
+        [`locations.${locationIndex}.endDate`]: null,
+        [`locations.${locationIndex}.takesFromUs`]: false,
+        [`locations.${locationIndex}.amount`]: null,
       },
     };
 
