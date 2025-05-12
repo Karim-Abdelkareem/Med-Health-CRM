@@ -44,6 +44,7 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    holidaysTaken: { type: Number, default: 0 },
     kpi: { type: Number, default: 100 },
   },
   {
