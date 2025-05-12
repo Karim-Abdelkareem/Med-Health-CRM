@@ -188,18 +188,18 @@ export const deactivateUser = asyncHandler(async (req, res, next) => {
   });
 });
 
-function calculateKPI(visitsCount, completedVisits, workingDays = 26, requiredPerDay = 12) {
+function calculateKPI(totalVisits, completedVisits, requiredMonthly = 220, requiredPercentage = 0.9) {
   const kpiBase = 100;
-  const requiredVisits = workingDays * requiredPerDay;
+  const minRequiredVisits = requiredMonthly * requiredPercentage; // 220 * 0.9 = 198
 
-  if (completedVisits >= requiredVisits) {
+  if (completedVisits >= minRequiredVisits) {
     return kpiBase;
   } else {
     const penalty = 0.15;
-    const reducedKPI = kpiBase * (1 - penalty);
-    return reducedKPI;
+    return kpiBase * (1 - penalty); // 85
   }
 }
+
 
 export const updateKPI = async (userId, visitsCount) => {
   try {
@@ -222,7 +222,18 @@ export const updateKPI = async (userId, visitsCount) => {
 };
 
 export const calculateMonthlyKPI = async (userId) => {
-  const plans = await Plan.find({ user: userId, type: "daily" });
+  const startOfMonth = new Date();
+  startOfMonth.setDate(1);
+  startOfMonth.setHours(0, 0, 0, 0);
+
+  const endOfMonth = new Date(startOfMonth);
+  endOfMonth.setMonth(endOfMonth.getMonth() + 1);
+
+  const plans = await Plan.find({
+    user: userId,
+    type: "daily",
+    date: { $gte: startOfMonth, $lt: endOfMonth },
+  });
 
   let totalVisits = 0;
   let completedVisits = 0;
@@ -232,8 +243,8 @@ export const calculateMonthlyKPI = async (userId) => {
     completedVisits += plan.locations.filter(visit => visit.status === "completed").length;
   });
 
-  const workingDays = plans.length;
-  const kpi = calculateKPI(totalVisits, completedVisits, workingDays);
+  const requiredMonthly = 220;
+  const kpi = calculateKPI(totalVisits, completedVisits, requiredMonthly);
 
   const user = await User.findById(userId);
   user.kpi = kpi;
@@ -241,6 +252,7 @@ export const calculateMonthlyKPI = async (userId) => {
 
   return kpi;
 };
+
 
 export const calculateKPIForAllEmployees = async (req, res) => {
   try {
@@ -278,7 +290,7 @@ export const calculateKPIForAllEmployees = async (req, res) => {
       });
 
       const workingDays = plans.length;
-      const kpi = calculateKPI(totalVisits, completedVisits, workingDays);
+      const kpi = calculateKPI(totalVisits, completedVisits, 220);
 
       employee.kpi = kpi;
       await employee.save();
@@ -317,7 +329,7 @@ export const calculateKPIForOneEmployee = async (req, res) => {
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
-    const kpi = await calculateMonthlyKPI(userId); 
+    const kpi = await calculateMonthlyKPI(userId);
 
     res.status(200).json({
       success: true,
