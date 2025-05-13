@@ -1,7 +1,6 @@
 import Plan from "./plan.model.js";
 import { rolesHierarchy, canAccessHigherRole } from "../../utils/roles.js";
 import User from "../userModule/userModel.js";
-import { updateKPI } from "../userModule/userController.js";
 import asyncHandler from "express-async-handler";
 import AppError from "../../utils/AppError.js";
 import Notification from "../notification/notificationModel.js";

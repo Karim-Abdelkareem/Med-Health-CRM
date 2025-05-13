@@ -189,65 +189,269 @@ export const deactivateUser = asyncHandler(async (req, res, next) => {
 });
 
 function calculateKPI(
-  visitsCount,
+  totalVisits,
   completedVisits,
-  workingDays = 26,
-  requiredPerDay = 12
+  workingDays = 22,
+  requiredPerDay = 10,
+  requiredPercentage = 0.9
 ) {
   const kpiBase = 100;
+  const requiredMonthly = workingDays * requiredPerDay; // 22 * 10 = 220
   const minRequiredVisits = requiredMonthly * requiredPercentage; // 220 * 0.9 = 198
 
-  // Calculate completion percentage
-  const completionPercentage = (completedVisits / requiredVisits) * 100;
+  // Calculate completion percentage relative to required monthly visits
+  const completionPercentage = (completedVisits / requiredMonthly) * 100;
 
-  if (completionPercentage >= 100) {
-    // Full KPI if 100% or more visits completed
-    return kpiBase;
-  } else if (completionPercentage >= 85) {
-    // No penalty if at least 85% of visits completed
+  if (completionPercentage >= 90) {
+    // Full KPI if 90% or more of required visits completed
     return kpiBase;
   } else {
-    // Apply penalty if less than 85% of visits completed
+    // Apply 15% penalty if less than 90% of required visits completed
     const penalty = 0.15;
     return kpiBase * (1 - penalty); // 85
   }
 }
 
-
-export const updateKPI = async (userId, visitsCount) => {
-  try {
-    const user = await User.findById(userId);
-
-    if (!user) {
-      throw new Error("User not found");
+// KPI Calculation Functions
+export const calculateKPIForAllEmployees = asyncHandler(
+  async (req, res, next) => {
+    const userRole = req.user.role;
+    if (!["admin", "GM"].includes(userRole)) {
+      return next(new AppError("ليس لديك صلاحية", 403));
     }
 
-    const completedVisits = visitsCount.filter(
-      (visit) => visit.status === "completed"
-    ).length;
-    const newKPI = calculateKPI(visitsCount.length, completedVisits);
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
 
-    user.kpi = newKPI;
-    await user.save();
+    const endOfMonth = new Date(startOfMonth);
+    endOfMonth.setMonth(endOfMonth.getMonth() + 1);
+    endOfMonth.setDate(0); // Last day of current month
 
-    return newKPI;
-  } catch (err) {
-    throw new Error(`Error updating KPI: ${err.message}`);
+    const users = await User.find({ role: { $nin: ["admin", "GM"] } });
+
+    const kpiReport = [];
+
+    for (const employee of users) {
+      const plans = await Plan.find({
+        user: employee._id,
+        visitDate: { $gte: startOfMonth, $lt: endOfMonth },
+      });
+
+      let totalVisits = 0;
+      let completedVisits = 0;
+
+      plans.forEach((plan) => {
+        totalVisits += plan.locations.length;
+        completedVisits += plan.locations.filter(
+          (visit) => visit.status === "completed"
+        ).length;
+      });
+
+      const workingDays = plans.length || 22;
+      const requiredPerDay = 10;
+      const requiredVisits = workingDays * requiredPerDay;
+
+      const kpi = calculateKPI(
+        totalVisits,
+        completedVisits,
+        workingDays,
+        requiredPerDay
+      );
+
+      employee.kpi = kpi;
+      await employee.save();
+
+      kpiReport.push({
+        employeeId: employee._id,
+        name: employee.name,
+        email: employee.email,
+        totalPlans: workingDays,
+        totalVisits,
+        completedVisits,
+        requiredVisits,
+        completionPercentage:
+          ((completedVisits / requiredVisits) * 100).toFixed(2) + "%",
+        kpi,
+      });
+    }
+
+    res.status(200).json({
+      status: "success",
+      message: "تم حساب KPI لجميع الموظفين",
+      data: kpiReport,
+    });
   }
-};
+);
 
-export const calculateMonthlyKPI = async (userId) => {
+export const calculateKPIForOneEmployee = asyncHandler(
+  async (req, res, next) => {
+    const { userId } = req.params;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return next(new AppError("User not found", 404));
+    }
+
+    const kpi = await calculateMonthlyKPI(userId);
+
+    res.status(200).json({
+      status: "success",
+      message: "تم حساب KPI للمستخدم",
+      data: {
+        userId: user._id,
+        name: user.name,
+        email: user.email,
+        kpi,
+      },
+    });
+  }
+);
+
+export const getMonthlyKPIStats = asyncHandler(async (req, res, next) => {
+  const userId = req.params.userId || req.user.id;
+
+  const user = await User.findById(userId);
+  if (!user) {
+    return next(new AppError("User not found", 404));
+  }
+
+  // Get current date
+  const currentDate = new Date();
+  const currentYear = currentDate.getFullYear();
+
+  // Array to store monthly data
+  const monthlyData = [];
+
+  // Month names
+  const monthNames = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
+
+  // Process each month of the current year up to current month
+  for (let month = 0; month < currentDate.getMonth() + 1; month++) {
+    // Set date range for the month
+    const startDate = new Date(currentYear, month, 1);
+    const endDate = new Date(currentYear, month + 1, 0);
+
+    // Find plans for this month
+    const plans = await Plan.find({
+      user: userId,
+      visitDate: {
+        $gte: startDate,
+        $lte: endDate,
+      },
+    });
+
+    // Calculate total and completed visits
+    let totalVisits = 0;
+    let completedVisits = 0;
+
+    plans.forEach((plan) => {
+      totalVisits += plan.locations.length;
+      completedVisits += plan.locations.filter(
+        (visit) => visit.status === "completed"
+      ).length;
+    });
+
+    // Calculate working days based on plans or use standard 22 days
+    const workingDays = plans.length || 22;
+    const requiredVisits = workingDays * 12; // 10 visits per day
+
+    // Target is 90%
+    const target = 90;
+
+    // Calculate achieved percentage (as a whole number)
+    let achieved = 0;
+    if (requiredVisits > 0) {
+      achieved = Math.round((completedVisits / requiredVisits) * 100);
+    }
+
+    // Add to monthly data array
+    monthlyData.push({
+      month: monthNames[month],
+      target,
+      achieved,
+      totalVisits,
+      completedVisits,
+      requiredVisits,
+      kpi: achieved >= 90 ? 100 : 85,
+    });
+  }
+
+  res.status(200).json({
+    status: "success",
+    message: "Monthly KPI statistics retrieved successfully",
+    data: monthlyData,
+  });
+});
+
+// Endpoint to get KPI for completed visits
+export const getCompletedVisitsKPI = asyncHandler(async (req, res, next) => {
+  const { userId, month, year } = req.query;
+
+  // If userId is provided, calculate for that user, otherwise use the current user
+  const targetUserId = userId || req.user._id;
+
+  // Convert month and year to numbers if provided
+  const targetMonth = month ? parseInt(month) - 1 : null; // Subtract 1 as JS months are 0-indexed
+  const targetYear = year ? parseInt(year) : null;
+
+  try {
+    // Check if user exists
+    const user = await User.findById(targetUserId);
+    if (!user) {
+      return next(new AppError("User not found", 404));
+    }
+
+    // Calculate KPI for completed visits
+    const kpiData = await calculateCompletedVisitsKPI(
+      targetUserId,
+      targetMonth,
+      targetYear
+    );
+
+    // Add user information to the response
+    kpiData.user = {
+      name: user.name,
+      email: user.email,
+      role: user.role,
+    };
+
+    res.status(200).json({
+      status: "success",
+      message: "KPI for completed visits calculated successfully",
+      data: kpiData,
+    });
+  } catch (error) {
+    return next(new AppError(`Error calculating KPI: ${error.message}`, 500));
+  }
+});
+
+// Helper function for monthly KPI calculation
+const calculateMonthlyKPI = async (userId) => {
   const startOfMonth = new Date();
   startOfMonth.setDate(1);
   startOfMonth.setHours(0, 0, 0, 0);
 
   const endOfMonth = new Date(startOfMonth);
   endOfMonth.setMonth(endOfMonth.getMonth() + 1);
+  endOfMonth.setDate(0); // Last day of current month
 
   const plans = await Plan.find({
     user: userId,
-    type: "daily",
-    date: { $gte: startOfMonth, $lt: endOfMonth },
+    visitDate: { $gte: startOfMonth, $lt: endOfMonth },
   });
 
   let totalVisits = 0;
@@ -260,8 +464,18 @@ export const calculateMonthlyKPI = async (userId) => {
     ).length;
   });
 
-  const requiredMonthly = 220;
-  const kpi = calculateKPI(totalVisits, completedVisits, requiredMonthly);
+  // Calculate working days based on plans or use standard 22 days
+  const workingDays = plans.length || 22;
+  const requiredPerDay = 10;
+  const requiredPercentage = 0.9; // 90%
+
+  const kpi = calculateKPI(
+    totalVisits,
+    completedVisits,
+    workingDays,
+    requiredPerDay,
+    requiredPercentage
+  );
 
   const user = await User.findById(userId);
   user.kpi = kpi;
@@ -270,196 +484,82 @@ export const calculateMonthlyKPI = async (userId) => {
   return kpi;
 };
 
+// Helper function for calculating KPI based on completed visits with updated requirements
+const calculateCompletedVisitsKPI = async (
+  userId,
+  month = null,
+  year = null
+) => {
+  // Set date range for the calculation
+  let startOfMonth, endOfMonth;
 
-export const calculateKPIForAllEmployees = async (req, res) => {
-  try {
-    const userRole = req.user.role;
-    if (!["ADMIN", "GM"].includes(userRole)) {
-      return res
-        .status(403)
-        .json({ success: false, message: "ليس لديك صلاحية" });
-    }
-
-    const startOfMonth = new Date();
+  if (month !== null && year !== null) {
+    // Use specified month and year
+    startOfMonth = new Date(year, month, 1);
+    endOfMonth = new Date(year, month + 1, 0);
+  } else {
+    // Use current month
+    startOfMonth = new Date();
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
 
-    const endOfMonth = new Date(startOfMonth);
+    endOfMonth = new Date(startOfMonth);
     endOfMonth.setMonth(endOfMonth.getMonth() + 1);
-
-    const users = await User.find({ role: { $nin: ["ADMIN", "GM"] } });
-
-    const kpiReport = [];
-
-    for (const employee of users) {
-      const plans = await Plan.find({
-        user: employee._id,
-        type: "daily",
-        date: { $gte: startOfMonth, $lt: endOfMonth },
-      });
-
-      let totalVisits = 0;
-      let completedVisits = 0;
-
-      plans.forEach((plan) => {
-        totalVisits += plan.locations.length;
-        completedVisits += plan.locations.filter(
-          (visit) => visit.status === "completed"
-        ).length;
-      });
-
-      const workingDays = plans.length;
-      const kpi = calculateKPI(totalVisits, completedVisits, 220);
-
-      employee.kpi = kpi;
-      await employee.save();
-
-      kpiReport.push({
-        employeeId: employee._id,
-        name: employee.name,
-        email: employee.email,
-        totalPlans: workingDays,
-        totalVisits,
-        completedVisits,
-        kpi,
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      message: "تم حساب KPI لجميع الموظفين",
-      data: kpiReport,
-    });
-  } catch (err) {
-    res.status(500).json({
-      success: false,
-      message: "حدث خطأ أثناء حساب KPI",
-      error: err.message,
-    });
+    endOfMonth.setDate(0); // Last day of current month
   }
-};
 
-export const calculateKPIForOneEmployee = async (req, res) => {
-  const { userId } = req.params;
+  // Find plans for the specified date range
+  const plans = await Plan.find({
+    user: userId,
+    visitDate: { $gte: startOfMonth, $lte: endOfMonth },
+  });
 
-  try {
-    const user = await User.findById(userId);
-    if (!user) {
-      return res
-        .status(404)
-        .json({ success: false, message: "User not found" });
-    }
+  // Calculate total and completed visits
+  let totalVisits = 0;
+  let completedVisits = 0;
 
-    const kpi = await calculateMonthlyKPI(userId);
+  plans.forEach((plan) => {
+    totalVisits += plan.locations.length;
+    completedVisits += plan.locations.filter(
+      (visit) => visit.status === "completed"
+    ).length;
+  });
 
-    res.status(200).json({
-      success: true,
-      message: "تم حساب KPI للمستخدم",
-      data: {
-        userId: user._id,
-        name: user.name,
-        email: user.email,
-        kpi,
-      },
-    });
-  } catch (err) {
-    res.status(500).json({
-      success: false,
-      message: "حدث خطأ أثناء حساب KPI",
-      error: err.message,
-    });
+  // Use updated requirements: 10 visits per day, 22 days per month
+  const workingDays = 22;
+  const requiredPerDay = 10;
+  const requiredMonthly = workingDays * requiredPerDay; // 22 * 10 = 220
+
+  // Calculate completion percentage
+  const completionPercentage = (completedVisits / requiredMonthly) * 100;
+
+  // Determine KPI score and salary deduction status
+  let kpiScore = 100;
+  let salaryDeduction = false;
+
+  // If completion percentage is below 90%, apply salary deduction
+  if (completionPercentage < 90) {
+    salaryDeduction = true;
   }
-};
 
-export const getMonthlyKPIStats = async (req, res) => {
-  try {
-    const userId = req.params.userId || req.user._id;
-
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
-    }
-
-    // Get current date
-    const currentDate = new Date();
-    const currentYear = currentDate.getFullYear();
-
-    // Array to store monthly data
-    const monthlyData = [];
-
-    // Month names
-    const monthNames = [
-      "Jan",
-      "Feb",
-      "Mar",
-      "Apr",
-      "May",
-      "Jun",
-      "Jul",
-      "Aug",
-      "Sep",
-      "Oct",
-      "Nov",
-      "Dec",
-    ];
-
-    // Process each month of the current year up to current month
-    for (let month = 0; month < currentDate.getMonth() + 1; month++) {
-      // Set date range for the month
-      const startDate = new Date(currentYear, month, 1);
-      const endDate = new Date(currentYear, month + 1, 0);
-
-      // Find plans for this month
-      const plans = await Plan.find({
-        user: userId,
-        visitDate: {
-          $gte: startDate,
-          $lte: endDate,
-        },
-      });
-
-      // Calculate total and completed visits
-      let totalVisits = 0;
-      let completedVisits = 0;
-
-      plans.forEach((plan) => {
-        totalVisits += plan.locations.length;
-        completedVisits += plan.locations.filter(
-          (visit) => visit.status === "completed"
-        ).length;
-      });
-
-      // Target is always 26 days * 12 locations = 312 visits
-      const target = 85; // Target percentage
-
-      // Calculate achieved percentage (as a whole number)
-      const requiredVisits = 26 * 12; // Fixed target: 26 days * 12 locations
-      let achieved = 0;
-      if (requiredVisits > 0) {
-        achieved = Math.round((completedVisits / requiredVisits) * 100);
-      }
-
-      // Add to monthly data array
-      monthlyData.push({
-        month: monthNames[month],
-        target,
-        achieved,
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      message: "Monthly KPI statistics retrieved successfully",
-      data: monthlyData,
-    });
-  } catch (err) {
-    res.status(500).json({
-      success: false,
-      message: "Error retrieving monthly KPI statistics",
-      error: err.message,
-    });
-  }
+  return {
+    userId,
+    period: {
+      month: startOfMonth.getMonth() + 1,
+      year: startOfMonth.getFullYear(),
+      startDate: startOfMonth,
+      endDate: endOfMonth,
+    },
+    visits: {
+      total: totalVisits,
+      completed: completedVisits,
+      required: requiredMonthly,
+    },
+    performance: {
+      completionPercentage: parseFloat(completionPercentage.toFixed(2)),
+      kpiScore,
+      salaryDeduction,
+    },
+    plans: plans.length,
+  };
 };
