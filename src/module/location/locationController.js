@@ -3,13 +3,22 @@ import AppError from "../../utils/AppError.js";
 import Location from "./locationModel.js";
 
 export const createLocation = asyncHandler(async (req, res, next) => {
-  const { locationName, address, state, city, longitude, latitude } = req.body;
+  const {
+    locationName,
+    address,
+    state,
+    city,
+    village,
+    longitude,
+    latitude,
+  } = req.body;
   const location = await Location.create({
     user: req.user._id,
     locationName,
     address,
     state,
     city,
+    village,
     longitude,
     latitude,
   });
@@ -18,13 +27,7 @@ export const createLocation = asyncHandler(async (req, res, next) => {
     status: "success",
     message: "Location created successfully",
     data: {
-      _id: location._id,
-      locationName: location.locationName,
-      address: location.address,
-      state: location.state,
-      city: location.city,
-      longitude: location.longitude,
-      latitude: location.latitude,
+      location,
     },
   });
 });

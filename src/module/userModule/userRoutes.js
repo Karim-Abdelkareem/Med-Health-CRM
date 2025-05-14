@@ -3,19 +3,26 @@ import * as userController from "./userController.js";
 import validate from "../../middleware/validate.js";
 import { userValidationSchema } from "./userValidator.js";
 import auth from "../../middleware/authentication.js";
+import { adminCreateUserSchema } from "../auth/authValidator.js";
+import * as auhtController from "../auth/authController.js";
 
 const router = express.Router();
 
 router
   .route("/")
-  .post(userController.createUser)
+  .post(
+    auth.protect,
+    auth.allowedTo("ADMIN", "GM", "HR"),
+    validate(adminCreateUserSchema),
+    auhtController.createUserByAdminOrGM
+  )
   .get(userController.getAllUsers)
   .get(userController.getUserProfile);
 
 router.get(
   "/kpi/all",
   auth.protect,
-  auth.allowedTo("admin", "GM"),
+  auth.allowedTo("admin", "GM", "HR"),
   userController.calculateKPIForAllEmployees
 );
 router.get(
@@ -47,6 +54,11 @@ router.patch(
   "/deactivate/:userId",
   auth.protect,
   userController.deactivateUser
+);
+router.patch(
+  "/change-password/:userId",
+  auth.protect,
+  userController.changeUserPassword
 );
 
 export default router;

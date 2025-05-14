@@ -23,11 +23,15 @@ export const login = asyncHandler(async (req, res, next) => {
   const { email, password } = req.body;
   let user = await User.findOne({ email });
   if (!user) {
-    return next(new AppError("Invalid email or password", 401));
+    return next(new AppError("Invalid email", 401));
   }
   const isValidPassword = await user.comparePassword(password);
   if (!isValidPassword) {
-    return next(new AppError("Invalid email or password", 401));
+    return next(new AppError("Invalid password", 401));
+  }
+  const isActive = user.active;
+  if (!isActive) {
+    return next(new AppError("User is not active", 401));
   }
   const token = jwt.sign(
     { id: user._id, name: user.name, email: user.email, role: user.role },
@@ -36,6 +40,14 @@ export const login = asyncHandler(async (req, res, next) => {
       expiresIn: "30d",
     }
   );
+
+  res.cookie("access_token", token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 30 * 24 * 60 * 60 * 1000,
+  });
+
   res.status(200).json({
     status: "success",
     message: "User logged in successfully",
@@ -47,41 +59,43 @@ export const login = asyncHandler(async (req, res, next) => {
 });
 
 export const createUserByAdminOrGM = asyncHandler(async (req, res) => {
-  const { name, email, password, role, managerId } = req.body;
-
-  const allowedRoles = {
-    ADMIN: ["GM", "HR", "LM", "DR", "R"],
-    GM: ["LM", "DR", "R"],
-  };
-
-  if (!allowedRoles[req.user.role]?.includes(role)) {
-    res.status(403);
-    throw new Error("You are not authorized to create users with this role");
-  }
+  const { name, email, password, LM, DM, governate, role } = req.body;
 
   const userExists = await User.findOne({ email });
+
   if (userExists) {
-    res.status(400);
-    throw new Error("User already exists");
+    return next(new AppError("User already exists", 400));
   }
 
-  const hashedPassword = await bcrypt.hash(password, 10);
-
-  const newUser = await User.create({
+  const user = await User.create({
     name,
     email,
-    password: hashedPassword,
+    password,
     role,
-    manager: managerId || req.user._id,
+    LM: LM || undefined,
+    DM: DM || undefined,
+    governate: governate || undefined,
   });
 
-  res.status(201).json({
-    message: "User created successfully",
-    user: {
-      id: newUser._id,
-      name: newUser.name,
-      email: newUser.email,
-      role: newUser.role,
-    },
+  if (user) {
+    res.status(201).json({
+      status: "success",
+      message: "User created successfully",
+      data: {
+        user,
+      },
+    });
+  }
+});
+
+export const logout = asyncHandler(async (req, res) => {
+  res.clearCookie("access_token", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+  });
+  res.status(200).json({
+    status: "success",
+    message: "User logged out successfully",
   });
 });

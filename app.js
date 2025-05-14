@@ -13,6 +13,8 @@ import dashboardRoutes from "./src/module/dashboard/dashboardRoutes.js";
 import notificationRoutes from "./src/module/notification/notificationRoutes.js";
 import holidayRoutes from "./src/module/Holidays/holidayRouter.js";
 import cors from "cors";
+import cookieParser from "cookie-parser";
+import helmet from "helmet";
 
 // Load environment variables
 dotenv.config();
@@ -23,14 +25,28 @@ connectDB();
 // Create Express app
 const app = express();
 
+//Allow Cors
+app.use(
+  cors({
+    origin: "http://localhost:5173", // <-- Your frontend origin
+    credentials: true, // <-- Allow cookies to be sent
+  })
+);
+
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-//Allow Cors
-app.use(cors());
+app.use(cookieParser());
+app.use(helmet());
 
 // Routes
+app.get("/api/check-auth", (req, res) => {
+  if (req.cookies.access_token) {
+    res.json({ isAuthenticated: true });
+  } else {
+    res.json({ isAuthenticated: false });
+  }
+});
 app.use("/api/users", userRoutes);
 app.use("/api/user", userProfileRoutes);
 app.use("/api/auth", authRoutes);

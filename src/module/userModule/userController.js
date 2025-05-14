@@ -5,7 +5,6 @@ import Plan from "../plan/plan.model.js";
 
 export const createUser = asyncHandler(async (req, res, next) => {
   const { name, email, password, LM, DM, governate, role } = req.body;
-  console.log(req.body);
 
   const userExists = await User.findOne({ email });
 
@@ -28,9 +27,7 @@ export const createUser = asyncHandler(async (req, res, next) => {
       status: "success",
       message: "User created successfully",
       data: {
-        _id: user._id,
-        name: user.name,
-        email: user.email,
+        user,
       },
     });
   }
@@ -72,6 +69,29 @@ export const updateUser = asyncHandler(async (req, res, next) => {
     });
   }
   return next(new AppError("User not found", 404));
+});
+
+export const changeUserPassword = asyncHandler(async (req, res, next) => {
+  const { userId } = req.params;
+  const { currentUserPassword, password } = req.body;
+
+  const user = await User.findById(userId);
+  if (!user) {
+    return next(new AppError("User not found", 404));
+  }
+
+  const confirm = await req.user.comparePassword(currentUserPassword);
+
+  if (!confirm) {
+    return next(new AppError("Current password is incorrect", 401));
+  }
+
+  user.password = password;
+  await user.save();
+  res.status(200).json({
+    status: "success",
+    message: "Password updated successfully",
+  });
 });
 
 export const deleteUser = asyncHandler(async (req, res, next) => {
@@ -367,7 +387,7 @@ export const getMonthlyKPIStats = asyncHandler(async (req, res, next) => {
 
     // Calculate working days based on plans or use standard 22 days
     const workingDays = plans.length || 22;
-    const requiredVisits = workingDays * 12; // 10 visits per day
+    const requiredVisits = workingDays * 12; // 12 visits per day
 
     // Target is 90%
     const target = 90;
