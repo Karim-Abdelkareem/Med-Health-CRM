@@ -46,6 +46,7 @@ export const login = asyncHandler(async (req, res, next) => {
     secure: process.env.NODE_ENV === "production",
     sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
     path: "/",
+    domain: ".vercel.app",
     maxAge: 30 * 24 * 60 * 60 * 1000,
   });
 
@@ -95,6 +96,7 @@ export const logout = asyncHandler(async (req, res) => {
     secure: process.env.NODE_ENV === "production",
     sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
     path: "/",
+    domain: ".vercel.app",
   });
 
   res.status(200).json({
