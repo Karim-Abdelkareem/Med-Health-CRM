@@ -28,19 +28,7 @@ const allowedOrigins = [
   process.env.productionUrl, // e.g. https://med-health-crm-frontend.vercel.app
 ];
 
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error("Not allowed by CORS"));
-      }
-    },
-    credentials: true,
-    allowedHeaders: ["Content-Type", "Authorization"],
-  })
-);
+app.use(cors({ origin: "*", credentials: true }));
 
 // Middleware
 app.use(express.json());
