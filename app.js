@@ -13,7 +13,6 @@ import dashboardRoutes from "./src/module/dashboard/dashboardRoutes.js";
 import notificationRoutes from "./src/module/notification/notificationRoutes.js";
 import holidayRoutes from "./src/module/Holidays/holidayRouter.js";
 import cors from "cors";
-import cookieParser from "cookie-parser";
 import helmet from "helmet";
 
 // Load environment variables
@@ -30,10 +29,7 @@ const allowedOrigins = [
 
 app.use(
   cors({
-    origin: [
-      "http://localhost:5173",
-      "https://med-health-crm-frontend.vercel.app",
-    ],
+    origin: allowedOrigins,
     credentials: true,
   })
 );
@@ -41,22 +37,12 @@ app.use(
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser());
 app.use(helmet());
 
 // Connect to database
 connectDB();
 
 // Routes
-app.get("/api/check-auth", (req, res) => {
-  console.log(req.cookies);
-
-  if (req.cookies.access_token) {
-    res.json({ isAuthenticated: true });
-  } else {
-    res.json({ isAuthenticated: false });
-  }
-});
 app.use("/api/users", userRoutes);
 app.use("/api/user", userProfileRoutes);
 app.use("/api/auth", authRoutes);
