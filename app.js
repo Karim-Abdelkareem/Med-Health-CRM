@@ -25,7 +25,7 @@ const app = express();
 //Allow Cors
 app.use(
   cors({
-    origin: [`${process.env.localUrl}`, `${process.env.productionUrl}`], // <-- Your frontend origin
+    origin: [`${process.env.localUrl}`, `${process.env.productionUrl}`],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
   })
@@ -42,6 +42,8 @@ connectDB();
 
 // Routes
 app.get("/api/check-auth", (req, res) => {
+  console.log(req.cookies);
+
   if (req.cookies.access_token) {
     res.json({ isAuthenticated: true });
   } else {

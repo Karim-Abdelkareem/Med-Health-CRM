@@ -42,11 +42,11 @@ export const login = asyncHandler(async (req, res, next) => {
   );
 
   res.cookie("access_token", token, {
-    httpOnly: true,
-    secure: true,
-    sameSite: "none", // Required for cross-site cookies
     path: "/", // Make it available to all routes
-    domain: ".vercel.app", // ✅ Works across both subdomains
+    domain: ".vercel.app",
+    sameSite: "None", // Required for cross-site cookies
+    secure: true,
+    httpOnly: true,
   });
 
   res.status(200).json({
@@ -91,11 +91,11 @@ export const createUserByAdminOrGM = asyncHandler(async (req, res) => {
 
 export const logout = asyncHandler(async (req, res) => {
   res.clearCookie("access_token", {
+    domain: ".vercel.app",
+    path: "/",
+    sameSite: "None",
     httpOnly: true,
     secure: true,
-    sameSite: "none",
-    path: "/",
-    domain: ".vercel.app", // ✅ Must match exactly what was set
   });
 
   res.status(200).json({
