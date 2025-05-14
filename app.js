@@ -19,9 +19,6 @@ import helmet from "helmet";
 // Load environment variables
 dotenv.config();
 
-// Connect to database
-connectDB();
-
 // Create Express app
 const app = express();
 
@@ -29,7 +26,8 @@ const app = express();
 app.use(
   cors({
     origin: [`${process.env.localUrl}`, `${process.env.productionUrl}`], // <-- Your frontend origin
-    credentials: true, // <-- Allow cookies to be sent
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
   })
 );
 
@@ -38,6 +36,9 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(helmet());
+
+// Connect to database
+connectDB();
 
 // Routes
 app.get("/api/check-auth", (req, res) => {
