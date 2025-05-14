@@ -23,11 +23,22 @@ dotenv.config();
 const app = express();
 
 //Allow Cors
+const allowedOrigins = [
+  process.env.localUrl, // e.g. http://localhost:3000
+  process.env.productionUrl, // e.g. https://med-health-crm-frontend.vercel.app
+];
+
 app.use(
   cors({
-    origin: [`${process.env.localUrl}`, `${process.env.productionUrl}`],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
