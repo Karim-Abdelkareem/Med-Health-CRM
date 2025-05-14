@@ -91,9 +91,12 @@ export const createUserByAdminOrGM = asyncHandler(async (req, res) => {
 export const logout = asyncHandler(async (req, res) => {
   res.clearCookie("access_token", {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    secure: true,
+    sameSite: "none",
+    path: "/",
+    domain: "https://med-health-crm-frontend.vercel.app",
   });
+
   res.status(200).json({
     status: "success",
     message: "User logged out successfully",
