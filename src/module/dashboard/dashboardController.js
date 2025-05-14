@@ -4,27 +4,11 @@ import User from "../userModule/userModel.js";
 import Plan from "../plan/plan.model.js";
 import Location from "../location/locationModel.js";
 import Notification from "../notification/notificationModel.js";
-// Holiday model is not directly used, but we calculate remaining holidays from user.holidaysTaken
 import AppError from "../../utils/AppError.js";
 
 // Get dashboard data for all users in the project
 export const getDashboardData = asyncHandler(async (req, res, next) => {
   const userId = req.user._id;
-
-  // Get or create dashboard for the current user
-  let dashboard = await Dashboard.findOne({ userId });
-
-  if (!dashboard) {
-    dashboard = await Dashboard.create({ userId });
-  }
-
-  // Get current user data
-  const currentUser = await User.findById(userId);
-  if (!currentUser) {
-    return next(new AppError("User not found", 404));
-  }
-
-  // Get current date
   const currentDate = new Date();
   const currentYear = currentDate.getFullYear();
   const currentMonth = currentDate.getMonth();
@@ -33,18 +17,136 @@ export const getDashboardData = asyncHandler(async (req, res, next) => {
   const startOfMonth = new Date(currentYear, currentMonth, 1);
   const endOfMonth = new Date(currentYear, currentMonth + 1, 0);
 
-  // Get all users in the system
-  const allUsers = await User.find().select(
-    "_id name email role kpi active LM DM Area governate holidaysTaken"
+  // Run parallel queries to improve performance
+  const [
+    dashboard,
+    currentUser,
+    allUsers,
+    allPlans,
+    allLocations,
+    allNotifications,
+  ] = await Promise.all([
+    Dashboard.findOne({ userId }) || Dashboard.create({ userId }),
+    User.findById(userId),
+    User.find().select(
+      "_id name email role kpi active LM DM Area governate holidaysTaken"
+    ),
+    Plan.find({ visitDate: { $gte: startOfMonth, $lte: endOfMonth } })
+      .populate("user", "_id")
+      .lean(),
+    Location.find().select("user").lean(),
+    Notification.find().select("recipient status").lean(),
+  ]);
+
+  if (!currentUser) {
+    return next(new AppError("User not found", 404));
+  }
+
+  // Pre-process data to avoid repeated queries
+  // Index plans by user
+  const plansByUser = {};
+  allPlans.forEach((plan) => {
+    const userId = plan.user?._id?.toString();
+    if (!userId) return;
+
+    if (!plansByUser[userId]) {
+      plansByUser[userId] = [];
+    }
+    plansByUser[userId].push(plan);
+  });
+
+  // Count locations by user
+  const locationCountByUser = {};
+  allLocations.forEach((location) => {
+    const userId = location.user?.toString();
+    if (!userId) return;
+
+    locationCountByUser[userId] = (locationCountByUser[userId] || 0) + 1;
+  });
+
+  // Count notifications by user
+  const notificationCountByUser = {};
+  allNotifications.forEach((notification) => {
+    const userId = notification.recipient?.toString();
+    if (!userId) return;
+
+    if (notification.status === "unread") {
+      notificationCountByUser[userId] =
+        (notificationCountByUser[userId] || 0) + 1;
+    }
+  });
+
+  // Calculate system-wide statistics
+  const systemStats = calculateSystemWideStatistics(
+    allUsers,
+    allPlans,
+    allLocations,
+    allNotifications
   );
 
-  // Get system-wide statistics
-  const systemStats = await getSystemWideStatistics(startOfMonth, endOfMonth);
+  // Process monthly KPI data once instead of repeatedly
+  const monthlyKPIData = await calculateAllMonthlyKPIData(
+    allUsers,
+    currentDate
+  );
 
-  // Get monthly KPI data for all employees
-  const allEmployeesMonthlyKPI = await getAllEmployeesMonthlyKPI();
+  // Process all users' data
+  const usersData = allUsers.map((user) => {
+    const userId = user._id.toString();
+    const userPlans = plansByUser[userId] || [];
 
-  // Prepare base dashboard data
+    // Calculate KPI statistics
+    let totalVisits = 0;
+    let completedVisits = 0;
+
+    userPlans.forEach((plan) => {
+      totalVisits += plan.locations.length;
+      completedVisits += plan.locations.filter(
+        (loc) => loc.status === "completed"
+      ).length;
+    });
+
+    // Calculate completion percentage
+    const requiredVisits = 26 * 12; // 26 days * 12 locations
+    const completionPercentage =
+      requiredVisits > 0
+        ? Math.round((completedVisits / requiredVisits) * 100)
+        : 0;
+
+    return {
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        kpi: user.kpi || 100,
+        active: user.active,
+        LM: user.LM,
+        DM: user.DM,
+        Area: user.Area,
+        governate: user.governate,
+      },
+      kpiData: {
+        totalVisits,
+        completedVisits,
+        completionPercentage,
+      },
+      planData: {
+        locationsCount: locationCountByUser[userId] || 0,
+        activePlans: userPlans.length,
+      },
+      notificationData: {
+        unreadNotifications: notificationCountByUser[userId] || 0,
+      },
+      holidayData: {
+        remainingHolidays: 27 - (user.holidaysTaken || 0),
+        holidaysTaken: user.holidaysTaken || 0,
+      },
+      monthlyKPI: monthlyKPIData[userId] || [],
+    };
+  });
+
+  // Prepare dashboard data
   let dashboardData = {
     currentUser: {
       _id: currentUser._id,
@@ -56,97 +158,20 @@ export const getDashboardData = asyncHandler(async (req, res, next) => {
     recentActivities: dashboard.recentActivities.slice(0, 5),
     preferences: dashboard.preferences,
     systemStats: systemStats,
-    allEmployeesMonthlyKPI: allEmployeesMonthlyKPI,
-    allUsers: [],
+    allEmployeesMonthlyKPI: calculateAverageMonthlyKPI(
+      monthlyKPIData,
+      currentDate
+    ),
+    allUsers: usersData,
   };
-
-  // Get data for all users
-  const usersData = await Promise.all(
-    allUsers.map(async (user) => {
-      // Get plans for the current month for this user
-      const plans = await Plan.find({
-        user: user._id,
-        visitDate: { $gte: startOfMonth, $lte: endOfMonth },
-      });
-
-      // Calculate KPI statistics
-      let totalVisits = 0;
-      let completedVisits = 0;
-
-      plans.forEach((plan) => {
-        totalVisits += plan.locations.length;
-        completedVisits += plan.locations.filter(
-          (loc) => loc.status === "completed"
-        ).length;
-      });
-
-      // Calculate completion percentage
-      const requiredVisits = 26 * 12; // 26 days * 12 locations
-      const completionPercentage =
-        requiredVisits > 0
-          ? Math.round((completedVisits / requiredVisits) * 100)
-          : 0;
-
-      // Get unread notifications count
-      const unreadNotifications = await Notification.countDocuments({
-        recipient: user._id,
-        status: "unread",
-      });
-
-      // Get remaining holidays
-      const remainingHolidays = 27 - (user.holidaysTaken || 0);
-
-      // Get locations count
-      const locationsCount = await Location.countDocuments({ user: user._id });
-
-      // Get monthly KPI data
-      const monthlyData = await getMonthlyKPIData(user._id);
-
-      // Return user data with statistics
-      return {
-        user: {
-          _id: user._id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-          kpi: user.kpi || 100,
-          active: user.active,
-          LM: user.LM,
-          DM: user.DM,
-          Area: user.Area,
-          governate: user.governate,
-        },
-        kpiData: {
-          totalVisits,
-          completedVisits,
-          completionPercentage,
-        },
-        planData: {
-          locationsCount,
-          activePlans: plans.length,
-        },
-        notificationData: {
-          unreadNotifications,
-        },
-        holidayData: {
-          remainingHolidays,
-          holidaysTaken: user.holidaysTaken || 0,
-        },
-        monthlyKPI: monthlyData,
-      };
-    })
-  );
-
-  // Add all users data to dashboard
-  dashboardData.allUsers = usersData;
 
   // Add role-specific statistics based on current user's role
   if (currentUser.role === "GM") {
-    // Additional GM-specific statistics
-    dashboardData.gmStats = await getGMStatistics();
+    // GM-specific statistics without additional DB queries
+    dashboardData.gmStats = calculateGMStatistics(allUsers);
   } else if (currentUser.role === "HR") {
-    // Additional HR-specific statistics
-    dashboardData.hrStats = await getHRStatistics();
+    // HR-specific statistics without additional DB queries
+    dashboardData.hrStats = calculateHRStatistics(allUsers);
   }
 
   res.status(200).json({
@@ -155,40 +180,25 @@ export const getDashboardData = asyncHandler(async (req, res, next) => {
   });
 });
 
-// Get system-wide statistics for GM and HR
-const getSystemWideStatistics = async (startOfMonth, endOfMonth) => {
-  // Get total users count by role
-  const userCounts = await User.aggregate([
-    {
-      $group: {
-        _id: "$role",
-        count: { $sum: 1 },
-      },
-    },
-  ]);
-
-  // Format user counts
+// Calculate system-wide statistics using pre-fetched data
+const calculateSystemWideStatistics = (
+  allUsers,
+  allPlans,
+  allLocations,
+  allNotifications
+) => {
+  // Get user counts by role
   const userCountsByRole = {};
-  userCounts.forEach((item) => {
-    userCountsByRole[item._id] = item.count;
+  let totalActiveUsers = 0;
+
+  allUsers.forEach((user) => {
+    userCountsByRole[user.role] = (userCountsByRole[user.role] || 0) + 1;
+    if (user.active) {
+      totalActiveUsers++;
+    }
   });
 
-  // Get total active users
-  const totalActiveUsers = await User.countDocuments({ active: true });
-
-  // Get total locations
-  const totalLocations = await Location.countDocuments();
-
-  // Get total plans for current month
-  const totalPlans = await Plan.countDocuments({
-    visitDate: { $gte: startOfMonth, $lte: endOfMonth },
-  });
-
-  // Get completed vs incomplete visits
-  const allPlans = await Plan.find({
-    visitDate: { $gte: startOfMonth, $lte: endOfMonth },
-  });
-
+  // Calculate visit statistics
   let totalVisits = 0;
   let completedVisits = 0;
 
@@ -199,82 +209,93 @@ const getSystemWideStatistics = async (startOfMonth, endOfMonth) => {
     ).length;
   });
 
-  // Calculate overall system KPI
+  // Calculate system KPI
   const systemKPI =
     totalVisits > 0 ? Math.round((completedVisits / totalVisits) * 100) : 0;
 
-  // Get total notifications
-  const totalNotifications = await Notification.countDocuments();
-  const unreadNotifications = await Notification.countDocuments({
-    status: "unread",
-  });
+  // Count notifications
+  const unreadNotifications = allNotifications.filter(
+    (n) => n.status === "unread"
+  ).length;
 
   return {
     users: {
-      total: Object.values(userCountsByRole).reduce((a, b) => a + b, 0),
+      total: allUsers.length,
       active: totalActiveUsers,
       byRole: userCountsByRole,
     },
     locations: {
-      total: totalLocations,
+      total: allLocations.length,
     },
     plans: {
-      total: totalPlans,
+      total: allPlans.length,
       totalVisits,
       completedVisits,
       completionRate: systemKPI,
     },
     notifications: {
-      total: totalNotifications,
+      total: allNotifications.length,
       unread: unreadNotifications,
     },
   };
 };
 
-// Get GM-specific statistics
-const getGMStatistics = async () => {
-  // Get top performing employees (highest KPI)
-  const topPerformers = await User.find({
-    role: { $nin: ["ADMIN", "GM", "HR"] },
-  })
-    .sort({ kpi: -1 })
-    .limit(5)
-    .select("name email role kpi");
+// Calculate GM-specific statistics without additional queries
+const calculateGMStatistics = (allUsers) => {
+  // Filter non-management users
+  const regularUsers = allUsers.filter(
+    (user) => !["ADMIN", "GM", "HR"].includes(user.role)
+  );
 
-  // Get underperforming employees (KPI < 85)
-  const underperformers = await User.find({
-    role: { $nin: ["ADMIN", "GM", "HR"] },
-    kpi: { $lt: 85 },
-  })
-    .sort({ kpi: 1 })
-    .limit(5)
-    .select("name email role kpi");
+  // Sort by KPI for top performers
+  const topPerformers = [...regularUsers]
+    .sort((a, b) => (b.kpi || 0) - (a.kpi || 0))
+    .slice(0, 5)
+    .map((user) => ({
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      kpi: user.kpi || 0,
+    }));
+
+  // Filter and sort for underperformers
+  const underperformers = regularUsers
+    .filter((user) => (user.kpi || 0) < 85)
+    .sort((a, b) => (a.kpi || 0) - (b.kpi || 0))
+    .slice(0, 5)
+    .map((user) => ({
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      kpi: user.kpi || 0,
+    }));
 
   return {
     topPerformers,
     underperformers,
-    // Add more GM-specific statistics as needed
   };
 };
 
-// Get HR-specific statistics
-const getHRStatistics = async () => {
-  // Get holiday statistics
-  const users = await User.find();
-
+// Calculate HR-specific statistics without additional queries
+const calculateHRStatistics = (allUsers) => {
   let totalHolidaysTaken = 0;
   let totalRemainingHolidays = 0;
 
-  users.forEach((user) => {
+  allUsers.forEach((user) => {
     totalHolidaysTaken += user.holidaysTaken || 0;
     totalRemainingHolidays += 27 - (user.holidaysTaken || 0);
   });
 
-  // Get users with most holidays taken
-  const topHolidayUsers = await User.find()
-    .sort({ holidaysTaken: -1 })
-    .limit(5)
-    .select("name email role holidaysTaken");
+  // Sort for top holiday users
+  const topHolidayUsers = [...allUsers]
+    .sort((a, b) => (b.holidaysTaken || 0) - (a.holidaysTaken || 0))
+    .slice(0, 5)
+    .map((user) => ({
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      holidaysTaken: user.holidaysTaken || 0,
+    }));
 
   return {
     holidays: {
@@ -282,16 +303,12 @@ const getHRStatistics = async () => {
       totalRemaining: totalRemainingHolidays,
       topUsers: topHolidayUsers,
     },
-    // Add more HR-specific statistics as needed
   };
 };
 
-// Get monthly KPI data for all employees
-const getAllEmployeesMonthlyKPI = async () => {
-  const currentDate = new Date();
+// Calculate monthly KPI data for all employees efficiently
+const calculateAllMonthlyKPIData = async (employees, currentDate) => {
   const currentYear = currentDate.getFullYear();
-
-  // Month names
   const monthNames = [
     "Jan",
     "Feb",
@@ -306,51 +323,105 @@ const getAllEmployeesMonthlyKPI = async () => {
     "Nov",
     "Dec",
   ];
+  const results = {};
 
-  // Get all regular employees
-  const employees = await User.find({
-    role: { $nin: ["ADMIN", "GM", "HR"] },
-  }).select("_id name");
+  // Get all plans for the current year up to current month in one query
+  const startOfYear = new Date(currentYear, 0, 1);
+  const endOfCurrentMonth = new Date(
+    currentYear,
+    currentDate.getMonth() + 1,
+    0
+  );
 
-  // Initialize result array
+  const allYearPlans = await Plan.find({
+    visitDate: { $gte: startOfYear, $lte: endOfCurrentMonth },
+  }).lean();
+
+  // Index plans by month and user
+  const plansByMonthAndUser = {};
+
+  allYearPlans.forEach((plan) => {
+    const userId = plan.user?.toString();
+    if (!userId) return;
+
+    const planMonth = new Date(plan.visitDate).getMonth();
+
+    if (!plansByMonthAndUser[userId]) {
+      plansByMonthAndUser[userId] = {};
+    }
+
+    if (!plansByMonthAndUser[userId][planMonth]) {
+      plansByMonthAndUser[userId][planMonth] = [];
+    }
+
+    plansByMonthAndUser[userId][planMonth].push(plan);
+  });
+
+  // Calculate KPI data for each employee
+  employees.forEach((employee) => {
+    const userId = employee._id.toString();
+    results[userId] = [];
+
+    for (let month = 0; month <= currentDate.getMonth(); month++) {
+      const userMonthPlans = plansByMonthAndUser[userId]?.[month] || [];
+
+      let totalVisits = 0;
+      let completedVisits = 0;
+
+      userMonthPlans.forEach((plan) => {
+        totalVisits += plan.locations.length;
+        completedVisits += plan.locations.filter(
+          (loc) => loc.status === "completed"
+        ).length;
+      });
+
+      const requiredVisits = 26 * 12;
+      const achieved =
+        requiredVisits > 0
+          ? Math.round((completedVisits / requiredVisits) * 100)
+          : 0;
+
+      results[userId].push({
+        month: monthNames[month],
+        target: 85,
+        achieved,
+      });
+    }
+  });
+
+  return results;
+};
+
+// Calculate average monthly KPI across all employees
+const calculateAverageMonthlyKPI = (monthlyKPIData, currentDate) => {
+  const monthNames = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
   const result = [];
 
-  // Process each month
-  for (let month = 0; month < currentDate.getMonth() + 1; month++) {
-    const startDate = new Date(currentYear, month, 1);
-    const endDate = new Date(currentYear, month + 1, 0);
-
-    // Calculate average KPI for this month
+  // For each month up to the current one
+  for (let month = 0; month <= currentDate.getMonth(); month++) {
     let totalKPI = 0;
     let employeeCount = 0;
 
-    for (const employee of employees) {
-      const plans = await Plan.find({
-        user: employee._id,
-        visitDate: { $gte: startDate, $lte: endDate },
-      });
-
-      if (plans.length > 0) {
-        let totalVisits = 0;
-        let completedVisits = 0;
-
-        plans.forEach((plan) => {
-          totalVisits += plan.locations.length;
-          completedVisits += plan.locations.filter(
-            (visit) => visit.status === "completed"
-          ).length;
-        });
-
-        const requiredVisits = 26 * 12;
-        const achieved =
-          requiredVisits > 0
-            ? Math.round((completedVisits / requiredVisits) * 100)
-            : 0;
-
-        totalKPI += achieved;
+    // Sum KPI values for this month across all employees
+    Object.values(monthlyKPIData).forEach((userData) => {
+      if (userData[month] && userData[month].achieved) {
+        totalKPI += userData[month].achieved;
         employeeCount++;
       }
-    }
+    });
 
     const averageKPI =
       employeeCount > 0 ? Math.round(totalKPI / employeeCount) : 0;
@@ -365,76 +436,7 @@ const getAllEmployeesMonthlyKPI = async () => {
   return result;
 };
 
-// Helper function to get monthly KPI data for a single user
-const getMonthlyKPIData = async (userId) => {
-  // Get current date
-  const currentDate = new Date();
-  const currentYear = currentDate.getFullYear();
-
-  // Array to store monthly data
-  const monthlyData = [];
-
-  // Month names
-  const monthNames = [
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
-  ];
-
-  // Process each month of the current year up to current month
-  for (let month = 0; month < currentDate.getMonth() + 1; month++) {
-    // Set date range for the month
-    const startDate = new Date(currentYear, month, 1);
-    const endDate = new Date(currentYear, month + 1, 0);
-
-    // Find plans for this month
-    const plans = await Plan.find({
-      user: userId,
-      visitDate: { $gte: startDate, $lte: endDate },
-    });
-
-    // Calculate total and completed visits
-    let totalVisits = 0;
-    let completedVisits = 0;
-
-    plans.forEach((plan) => {
-      totalVisits += plan.locations.length;
-      completedVisits += plan.locations.filter(
-        (visit) => visit.status === "completed"
-      ).length;
-    });
-
-    // Target is always 85% (minimum required to avoid penalty)
-    const target = 85;
-
-    // Calculate achieved percentage
-    const requiredVisits = 26 * 12; // Fixed target: 26 days * 12 locations
-    let achieved = 0;
-    if (requiredVisits > 0) {
-      achieved = Math.round((completedVisits / requiredVisits) * 100);
-    }
-
-    // Add to monthly data array
-    monthlyData.push({
-      month: monthNames[month],
-      target,
-      achieved,
-    });
-  }
-
-  return monthlyData;
-};
-
-// Update user dashboard preferences
+// Update user dashboard preferences - unchanged
 export const updatePreferences = asyncHandler(async (req, res) => {
   const { theme, notificationsEnabled, language } = req.body;
 
@@ -462,7 +464,7 @@ export const updatePreferences = asyncHandler(async (req, res) => {
   });
 });
 
-// Add activity to user dashboard
+// Add activity to user dashboard - unchanged
 export const addActivity = asyncHandler(async (req, res) => {
   const { type, description } = req.body;
 
@@ -494,7 +496,7 @@ export const addActivity = asyncHandler(async (req, res) => {
   });
 });
 
-// Get dashboard notifications
+// Get dashboard notifications - unchanged
 export const getNotifications = asyncHandler(async (req, res) => {
   let dashboard = await Dashboard.findOne({ userId: req.user._id });
 
@@ -508,7 +510,7 @@ export const getNotifications = asyncHandler(async (req, res) => {
   });
 });
 
-// Update notification status
+// Update notification status - unchanged
 export const updateNotificationStatus = asyncHandler(async (req, res, next) => {
   const { notificationId } = req.params;
   const { read } = req.body;
