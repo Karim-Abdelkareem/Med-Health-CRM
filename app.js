@@ -28,7 +28,12 @@ const allowedOrigins = [
   process.env.productionUrl, // e.g. https://med-health-crm-frontend.vercel.app
 ];
 
-app.use(cors({ origin: "*", credentials: true }));
+app.use(
+  cors({
+    origin: ["http://localhost:3000", "https://yourfrontend.vercel.app"],
+    credentials: true,
+  })
+);
 
 // Middleware
 app.use(express.json());
