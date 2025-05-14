@@ -44,9 +44,9 @@ export const login = asyncHandler(async (req, res, next) => {
   res.cookie("access_token", token, {
     httpOnly: true,
     secure: true,
-    sameSite: "none",
-    path: "/",
-    domain: ".vercel.app",
+    sameSite: "none", // Required for cross-site cookies
+    path: "/", // Make it available to all routes
+    domain: ".vercel.app", // ✅ Works across both subdomains
   });
 
   res.status(200).json({
@@ -95,7 +95,7 @@ export const logout = asyncHandler(async (req, res) => {
     secure: true,
     sameSite: "none",
     path: "/",
-    domain: ".vercel.app",
+    domain: ".vercel.app", // ✅ Must match exactly what was set
   });
 
   res.status(200).json({
