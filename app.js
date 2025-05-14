@@ -30,7 +30,10 @@ const allowedOrigins = [
 
 app.use(
   cors({
-    origin: ["http://localhost:3000", "https://yourfrontend.vercel.app"],
+    origin: [
+      "http://localhost:5173",
+      "https://med-health-crm-frontend.vercel.app",
+    ],
     credentials: true,
   })
 );
