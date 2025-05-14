@@ -45,6 +45,7 @@ export const login = asyncHandler(async (req, res, next) => {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    path: "/",
     maxAge: 30 * 24 * 60 * 60 * 1000,
   });
 
@@ -91,10 +92,9 @@ export const createUserByAdminOrGM = asyncHandler(async (req, res) => {
 export const logout = asyncHandler(async (req, res) => {
   res.clearCookie("access_token", {
     httpOnly: true,
-    secure: true,
-    sameSite: "none",
+    secure: process.env.NODE_ENV === "production",
+    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
     path: "/",
-    domain: "https://med-health-crm-frontend.vercel.app",
   });
 
   res.status(200).json({
