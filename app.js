@@ -41,8 +41,6 @@ connectDB();
 
 // Routes
 app.get("/api/check-auth", (req, res) => {
-  console.log(req.cookies);
-
   if (req.cookies.access_token) {
     res.json({ isAuthenticated: true });
   } else {
