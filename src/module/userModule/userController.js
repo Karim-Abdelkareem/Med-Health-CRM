@@ -5,6 +5,7 @@ import Plan from "../plan/plan.model.js";
 
 export const createUser = asyncHandler(async (req, res, next) => {
   const { name, email, password, LM, DM, governate, role } = req.body;
+  console.log(req.body);
 
   const userExists = await User.findOne({ email });
 
