@@ -58,7 +58,7 @@ export const login = asyncHandler(async (req, res, next) => {
   });
 });
 
-export const createUserByAdminOrGM = asyncHandler(async (req, res) => {
+export const createUserByAdminOrGM = asyncHandler(async (req, res, next) => {
   const { name, email, password, LM, DM, governate, role } = req.body;
 
   const userExists = await User.findOne({ email });
@@ -77,15 +77,13 @@ export const createUserByAdminOrGM = asyncHandler(async (req, res) => {
     governate: governate || undefined,
   });
 
-  if (user) {
-    res.status(201).json({
-      status: "success",
-      message: "User created successfully",
-      data: {
-        user,
-      },
-    });
-  }
+  res.status(201).json({
+    status: "success",
+    message: "User created successfully",
+    data: {
+      user,
+    },
+  });
 });
 
 export const logout = asyncHandler(async (req, res) => {
