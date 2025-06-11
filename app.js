@@ -25,7 +25,7 @@ const app = express();
 //Allow Cors
 app.use(
   cors({
-    origin: [`${process.env.localUrl}`, `${process.env.productionUrl}`], // <-- Your frontend origin
+    origin: [`${process.env.localUrl}`, `${process.env.productionUrl}`,`${process.env.server}`], // <-- Your frontend origin
     credentials: true,
   })
 );
