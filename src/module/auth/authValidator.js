@@ -7,11 +7,7 @@ export const adminCreateUserSchema = Joi.object({
   role: Joi.string()
     .required()
     .trim()
-<<<<<<< HEAD
     .valid("GM", "LM", "Area", "DM", "HR", "R"),
-=======
-    .valid("ADMIN", "GM", "LM", "Area", "DM", "HR", "R"),
->>>>>>> 551bd43c4f7eedae107f65ae5fb5e295cdd81d6b
   governate: Joi.string().optional(),
   LM: Joi.string().optional().allow(null, ""),
   DM: Joi.string().optional().allow(null, ""),

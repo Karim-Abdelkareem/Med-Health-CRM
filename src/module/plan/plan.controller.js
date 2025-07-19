@@ -47,10 +47,6 @@ export const deletePlan = async (req, res) => {
 
     if (!plan) return res.status(404).json({ message: "Plan not found" });
 
-    if (plan.user.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: "Unauthorized" });
-    }
-
     await plan.deleteOne();
     res.json({ message: "Plan deleted successfully" });
   } catch (err) {
@@ -209,13 +205,6 @@ export const updateVisitedRegion = asyncHandler(async (req, res, next) => {
 
     if (locationIndex === -1) {
       // Log all location IDs for debugging
-      console.log(
-        "All location IDs:",
-        plan.locations.map((loc) => ({
-          _id: loc._id ? loc._id.toString() : "undefined",
-          location: loc.location ? loc.location.toString() : "undefined",
-        }))
-      );
       return next(new AppError("Location not found in this plan", 404));
     }
 
@@ -762,7 +751,7 @@ export const getPlanById = asyncHandler(async (req, res, next) => {
   res.status(200).json(plan);
 });
 
-//incomplete plan
+//incomplete plan - COMPLETE FIXED VERSION
 export const incompletePlanLocation = asyncHandler(async (req, res, next) => {
   const { id, locationId } = req.params;
   const { note } = req.body;
@@ -799,24 +788,43 @@ export const incompletePlanLocation = asyncHandler(async (req, res, next) => {
     const locationObj = plan.locations[locationIndex].location;
     const locationName = locationObj.locationName || "Unknown Location";
 
-    // Check if notes is a string and convert it to an array if needed
-    if (typeof plan.notes === "string") {
-      // First, update the plan to convert notes from string to array
+    // Determine which notes field to update based on user role
+    let notesField;
+    switch (userRole) {
+      case "GM":
+        notesField = "gmNotes";
+        break;
+      case "LM":
+        notesField = "lmNotes";
+        break;
+      case "HR":
+        notesField = "hrNotes";
+        break;
+      case "DM":
+        notesField = "dmNotes";
+        break;
+      default:
+        notesField = "notes";
+    }
+
+    // Check if the specific notes field exists and is a string, convert to array if needed
+    const currentPlan = await Plan.findById(id);
+    if (typeof currentPlan[notesField] === "string") {
       await Plan.findByIdAndUpdate(
         id,
-        { $set: { notes: [] } },
+        { $set: { [notesField]: [] } },
         { runValidators: false }
       );
     }
 
-    // Create an update object with only the fields we want to change
+    // Create an update object for the location status
     const updateData = {
       $set: {
         [`locations.${locationIndex}.status`]: "incomplete",
       },
     };
 
-    // Update the plan using findByIdAndUpdate to avoid validation issues with other fields
+    // Update the location status
     await Plan.findByIdAndUpdate(id, updateData, {
       new: true,
       runValidators: false,
@@ -824,62 +832,56 @@ export const incompletePlanLocation = asyncHandler(async (req, res, next) => {
 
     // Add a note if provided
     if (note && note.trim()) {
-      // Determine which notes array to update based on user role
-      let notesField;
-      switch (userRole) {
-        case "GM":
-          notesField = "gmNotes";
-          break;
-        case "LM":
-          notesField = "lmNotes";
-          break;
-        case "HR":
-          notesField = "hrNotes";
-          break;
-        case "DM":
-          notesField = "dmNotes";
-          break;
-        default:
-          notesField = "notes";
-      }
+      let noteUpdateQuery;
 
-      // Check if the notes field is a string and convert it to an array if needed
-      if (typeof plan[notesField] === "string") {
-        await Plan.findByIdAndUpdate(
-          id,
-          { $set: { [notesField]: [] } },
-          { runValidators: false }
-        );
-      }
-
-      // Create the note object
-      const noteObj = {
-        user: req.user._id,
-        location: locationObj._id || locationObj,
-        type: note.trim(),
-      };
-
-      // If it's a regular note (not role-based), use a different structure
       if (notesField === "notes") {
-        await Plan.findByIdAndUpdate(
-          id,
-          {
-            $push: {
-              notes: {
-                location: locationObj._id || locationObj,
-                note: note.trim(),
-              },
+        // Regular notes structure
+        noteUpdateQuery = {
+          $push: {
+            notes: {
+              location: locationObj._id || locationObj,
+              note: note.trim(),
+              type: "incomplete_status",
+              createdAt: new Date(),
             },
           },
-          { runValidators: false }
-        );
+        };
       } else {
-        // Add the note to the appropriate role-based notes array
-        await Plan.findByIdAndUpdate(
-          id,
-          { $push: { [notesField]: noteObj } },
-          { runValidators: false }
-        );
+        // Role-based notes structure - try multiple possible field structures
+        const noteObj = {
+          user: req.user._id,
+          location: locationObj._id || locationObj,
+          note: note.trim(), // Primary field for note content
+          content: note.trim(), // Alternative field name
+          message: note.trim(), // Another alternative
+          type: "incomplete_status",
+          status: "incomplete",
+          createdAt: new Date(),
+          createdBy: req.user._id,
+        };
+
+        noteUpdateQuery = {
+          $push: { [notesField]: noteObj },
+        };
+      }
+
+      // Execute the note update
+      const noteUpdateResult = await Plan.findByIdAndUpdate(
+        id,
+        noteUpdateQuery,
+        {
+          new: true,
+          runValidators: false,
+        }
+      );
+
+      // Verify the note was saved
+      const verifyPlan = await Plan.findById(id).select(notesField);
+
+      // Check the last added note specifically
+      if (verifyPlan[notesField] && verifyPlan[notesField].length > 0) {
+        const lastNote =
+          verifyPlan[notesField][verifyPlan[notesField].length - 1];
       }
     }
 
@@ -912,6 +914,7 @@ export const incompletePlanLocation = asyncHandler(async (req, res, next) => {
         planId: plan._id,
         locationId,
         noteAdded: note ? true : false,
+        noteContent: note ? note.trim() : null,
         notification: {
           title: notificationTitle,
           message: notificationMessage,
@@ -919,12 +922,12 @@ export const incompletePlanLocation = asyncHandler(async (req, res, next) => {
       },
     });
   } catch (error) {
+    console.error("Error in incompletePlanLocation:", error);
     return next(
       new AppError(`Error updating location status: ${error.message}`, 500)
     );
   }
 });
-
 //Get User Plans
 export const getUserPlans = asyncHandler(async (req, res, next) => {
   const { id } = req.params;

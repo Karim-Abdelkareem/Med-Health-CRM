@@ -5,8 +5,6 @@ import Plan from "../plan/plan.model.js";
 
 export const createUser = asyncHandler(async (req, res, next) => {
   const { name, email, password, LM, DM, governate, role } = req.body;
-  console.log(req.body);
-
   const userExists = await User.findOne({ email });
 
   if (userExists) {
@@ -96,7 +94,7 @@ export const changeUserPassword = asyncHandler(async (req, res, next) => {
 });
 
 export const deleteUser = asyncHandler(async (req, res, next) => {
-  const user = await User.findByIdAndDelete(req.params.id);
+  const user = await User.findByIdAndDelete(req.params.userId);
 
   if (user) {
     return res.status(200).json({
@@ -189,7 +187,10 @@ export const getUsersByRole = asyncHandler(async (req, res, next) => {
 });
 
 export const getAllEmployees = asyncHandler(async (req, res, next) => {
-  const users = await User.find({ role: { $nin: ["HR", "GM"] } });
+  const users = await User.find({
+    _id: { $ne: req.user._id },
+  });
+
   res.status(200).json({
     status: "success",
     message: "Users fetched successfully",

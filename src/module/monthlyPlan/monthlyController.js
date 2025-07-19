@@ -3,6 +3,7 @@ import asyncHandler from "express-async-handler";
 import AppError from "../../utils/AppError.js";
 import Plan from "../plan/plan.model.js";
 import mongoose from "mongoose";
+import User from "../userModule/userModel.js";
 
 export const createMonthlyPlan = asyncHandler(async (req, res, next) => {
   const { startDate, endDate, plans, notes } = req.body;
@@ -148,13 +149,6 @@ export const deleteMonthlyPlan = asyncHandler(async (req, res, next) => {
     return next(new AppError("Monthly plan not found", 404));
   }
 
-  // Check if the user is authorized to delete this plan
-  if (monthlyPlan.user.toString() !== req.user._id.toString()) {
-    return next(
-      new AppError("You are not authorized to delete this plan", 403)
-    );
-  }
-
   // Get all plan IDs associated with this monthly plan
   const planIds = monthlyPlan.plans;
 
@@ -188,4 +182,40 @@ export const deleteMonthlyPlan = asyncHandler(async (req, res, next) => {
       new AppError(`Error deleting monthly plan: ${error.message}`, 500)
     );
   }
+});
+
+export const getUserCurrentMonthPlan = asyncHandler(async (req, res, next) => {
+  const { userId } = req.params;
+  const user = await User.findById(userId);
+  if (!user) {
+    return next(new AppError("User not found", 404));
+  }
+  const now = new Date();
+
+  const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const lastDayOfMonth = new Date(
+    now.getFullYear(),
+    now.getMonth() + 1,
+    0,
+    23,
+    59,
+    59,
+    999
+  );
+  const monthlyPlan = await monthlyModel.findOne({
+    user: userId,
+    startDate: { $lte: lastDayOfMonth },
+    endDate: { $gte: firstDayOfMonth },
+  });
+
+  if (!monthlyPlan) {
+    return next(
+      new AppError("No monthly plan found for the current month", 404)
+    );
+  }
+
+  res.status(200).json({
+    status: "success",
+    data: monthlyPlan,
+  });
 });

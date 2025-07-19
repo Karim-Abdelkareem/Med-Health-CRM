@@ -34,7 +34,13 @@ export const login = asyncHandler(async (req, res, next) => {
     return next(new AppError("User is not active", 401));
   }
   const token = jwt.sign(
-    { id: user._id, name: user.name, email: user.email, role: user.role },
+    {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      governate: user.governate,
+    },
     process.env.JWT_SECRET,
     {
       expiresIn: "30d",

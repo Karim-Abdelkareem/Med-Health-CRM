@@ -27,7 +27,7 @@ const router = express.Router();
 router.get("/all", auth.protect, getMyPlans);
 router.get("/", auth.protect, getMyPlansByFilter);
 router.put("/:id", auth.protect, updatePlan);
-router.delete("/:id", auth.protect, deletePlan);
+router.delete("/:id", auth.protect, auth.allowedTo("HR", "GM"), deletePlan);
 router.patch("/:id/manager-note", auth.protect, addManagerNote);
 router.get("/all-under-me", auth.protect, getPlansByHierarchy);
 router.put("/complete/:id/:locationId", auth.protect, updateVisitedRegion);
