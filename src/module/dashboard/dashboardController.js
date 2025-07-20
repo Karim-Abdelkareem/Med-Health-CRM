@@ -18,25 +18,22 @@ export const getDashboardData = asyncHandler(async (req, res, next) => {
   const endOfMonth = new Date(currentYear, currentMonth + 1, 0);
 
   // Run parallel queries to improve performance
-  const [
-    dashboard,
-    currentUser,
-    allUsers,
-    allPlans,
-    allLocations,
-    allNotifications,
-  ] = await Promise.all([
-    Dashboard.findOne({ userId }) || Dashboard.create({ userId }),
-    User.findById(userId),
-    User.find().select(
-      "_id name email role kpi active LM DM Area governate holidaysTaken"
-    ),
-    Plan.find({ visitDate: { $gte: startOfMonth, $lte: endOfMonth } })
-      .populate("user", "_id")
-      .lean(),
-    Location.find().select("user").lean(),
-    Notification.find().select("recipient status").lean(),
-  ]);
+  let dashboard = await Dashboard.findOne({ userId });
+  if (!dashboard) {
+    dashboard = await Dashboard.create({ userId });
+  }
+  const [currentUser, allUsers, allPlans, allLocations, allNotifications] =
+    await Promise.all([
+      User.findById(userId),
+      User.find().select(
+        "_id name email role kpi active LM DM Area governate holidaysTaken"
+      ),
+      Plan.find({ visitDate: { $gte: startOfMonth, $lte: endOfMonth } })
+        .populate("user", "_id")
+        .lean(),
+      Location.find().select("user").lean(),
+      Notification.find().select("recipient status").lean(),
+    ]);
 
   if (!currentUser) {
     return next(new AppError("User not found", 404));
