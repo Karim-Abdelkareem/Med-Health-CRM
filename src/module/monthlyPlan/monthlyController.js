@@ -7,7 +7,9 @@ import User from "../userModule/userModel.js";
 
 export const createMonthlyPlan = asyncHandler(async (req, res, next) => {
   const { startDate, endDate, plans, notes } = req.body;
+  console.log(req.body);
 
+  // Validate plans
   if (!plans || !Array.isArray(plans)) {
     return next(new AppError("Plans must be an array", 400));
   }
@@ -15,17 +17,26 @@ export const createMonthlyPlan = asyncHandler(async (req, res, next) => {
   // Create all individual plans
   const createdPlans = await Promise.all(
     plans.map(async (plan) => {
-      const transformedLocations = plan.locations.map((id) => ({
-        location: id,
-        status: "incomplete", // default status
-      }));
+      // Ensure locations is a valid array
+      const transformedLocations = Array.isArray(plan.locations)
+        ? plan.locations.map((id) => ({
+            location: id,
+            status: "incomplete", // default status
+          }))
+        : [];
+
+      // Ensure tasks is an array
+      const safeTasks = Array.isArray(plan.tasks) ? plan.tasks : [];
+
+      // Ensure notes is an array
+      const safeNotes = Array.isArray(plan.notes) ? plan.notes : [];
 
       const createdPlan = await Plan.create({
         user: req.user._id,
         visitDate: plan.visitDate,
         locations: transformedLocations,
-        tasks: plan.tasks || [],
-        notes: plan.notes && plan.notes.length > 0 ? plan.notes : [],
+        tasks: safeTasks,
+        notes: safeNotes,
       });
 
       return createdPlan._id;
@@ -38,7 +49,7 @@ export const createMonthlyPlan = asyncHandler(async (req, res, next) => {
     startDate,
     endDate,
     plans: createdPlans,
-    notes: notes || "",
+    notes: Array.isArray(notes) ? notes : notes || "", // support array or string
   });
 
   res.status(201).json({
@@ -46,7 +57,7 @@ export const createMonthlyPlan = asyncHandler(async (req, res, next) => {
     message: "Monthly plan created successfully",
     data: {
       user: monthlyPlan.user,
-      plans: monthlyPlan.plans,
+      plans: monthlyPlan.plans, // IDs only unless populated
     },
   });
 });
@@ -68,6 +79,7 @@ export const getMyPlans = asyncHandler(async (req, res) => {
 export const getCurrentMonthPlans = asyncHandler(async (req, res, next) => {
   const now = new Date();
 
+  // Current month range
   const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const lastDayOfMonth = new Date(
     now.getFullYear(),
@@ -79,7 +91,8 @@ export const getCurrentMonthPlans = asyncHandler(async (req, res, next) => {
     999
   );
 
-  const monthlyPlan = await monthlyModel
+  // Try to get current month plan
+  let monthlyPlan = await monthlyModel
     .findOne({
       user: req.user._id,
       startDate: { $lte: lastDayOfMonth },
@@ -87,44 +100,55 @@ export const getCurrentMonthPlans = asyncHandler(async (req, res, next) => {
     })
     .populate({
       path: "plans",
-      populate: {
-        path: "locations.location",
-      },
-    })
-    .populate({
-      path: "plans",
-      populate: {
-        path: "notes.location",
-      },
-    })
-    .populate({
-      path: "plans",
-      populate: {
-        path: "hrNotes.location hrNotes.user",
-      },
-    })
-    .populate({
-      path: "plans",
-      populate: {
-        path: "lmNotes.location lmNotes.user",
-      },
-    })
-    .populate({
-      path: "plans",
-      populate: {
-        path: "gmNotes.location gmNotes.user",
-      },
-    })
-    .populate({
-      path: "plans",
-      populate: {
-        path: "dmNotes.location dmNotes.user",
-      },
+      populate: [
+        { path: "locations.location" },
+        { path: "notes.location" },
+        { path: "hrNotes.location hrNotes.user" },
+        { path: "lmNotes.location lmNotes.user" },
+        { path: "gmNotes.location gmNotes.user" },
+        { path: "dmNotes.location dmNotes.user" },
+      ],
     });
+
+  // If no current month plan, check next month
+  if (!monthlyPlan) {
+    const firstDayNextMonth = new Date(
+      now.getFullYear(),
+      now.getMonth() + 1,
+      1
+    );
+    const lastDayNextMonth = new Date(
+      now.getFullYear(),
+      now.getMonth() + 2,
+      0,
+      23,
+      59,
+      59,
+      999
+    );
+
+    monthlyPlan = await monthlyModel
+      .findOne({
+        user: req.user._id,
+        startDate: { $lte: lastDayNextMonth },
+        endDate: { $gte: firstDayNextMonth },
+      })
+      .populate({
+        path: "plans",
+        populate: [
+          { path: "locations.location" },
+          { path: "notes.location" },
+          { path: "hrNotes.location hrNotes.user" },
+          { path: "lmNotes.location lmNotes.user" },
+          { path: "gmNotes.location gmNotes.user" },
+          { path: "dmNotes.location dmNotes.user" },
+        ],
+      });
+  }
 
   if (!monthlyPlan) {
     return next(
-      new AppError("No monthly plan found for the current month", 404)
+      new AppError("No monthly plan found for the current or next month", 404)
     );
   }
 
@@ -137,47 +161,30 @@ export const getCurrentMonthPlans = asyncHandler(async (req, res, next) => {
 export const deleteMonthlyPlan = asyncHandler(async (req, res, next) => {
   const { id } = req.params;
 
-  // Check if ID is valid
   if (!mongoose.Types.ObjectId.isValid(id)) {
     return next(new AppError("Invalid monthly plan ID", 400));
   }
 
-  // Find the monthly plan
   const monthlyPlan = await monthlyModel.findById(id);
 
   if (!monthlyPlan) {
     return next(new AppError("Monthly plan not found", 404));
   }
 
-  // Get all plan IDs associated with this monthly plan
   const planIds = monthlyPlan.plans;
 
-  // Start a session for transaction
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
   try {
-    // Delete all individual plans
     if (planIds && planIds.length > 0) {
-      // Use the plan IDs directly - Mongoose can handle ObjectIds
-      await Plan.deleteMany({ _id: { $in: planIds } }, { session });
+      await Plan.deleteMany({ _id: { $in: planIds } });
     }
 
-    // Delete the monthly plan
-    await monthlyModel.findByIdAndDelete(id, { session });
-
-    // Commit the transaction
-    await session.commitTransaction();
-    session.endSession();
+    await monthlyModel.findByIdAndDelete(id);
 
     res.status(200).json({
       status: "success",
       message: "Monthly plan and all associated plans deleted successfully",
     });
   } catch (error) {
-    // Abort transaction in case of error
-    await session.abortTransaction();
-    session.endSession();
     return next(
       new AppError(`Error deleting monthly plan: ${error.message}`, 500)
     );
