@@ -746,7 +746,7 @@ export const getPlanById = asyncHandler(async (req, res, next) => {
   const { id } = req.params;
   const plan = await Plan.findById(id)
     .populate("locations.location")
-    .populate("hrNotes.user");
+    .populate("hrNotes.user").populate("notes.location");
   if (!plan) return next(new AppError("Plan not found", 404));
   res.status(200).json(plan);
 });
